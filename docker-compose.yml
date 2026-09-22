@@ -1,0 +1,60 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: identityhub-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: "IdentityHub123!"
+    ports:
+      - "1433:1433"
+    volumes:
+      - identityhub-sqlserver-data:/var/opt/mssql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  userservice:
+    build:
+      context: .
+      dockerfile: src/UserService/IdentityHub.UserService.Api/Dockerfile
+    container_name: identityhub-userservice
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__SqlServer: "Server=sqlserver,1433;Database=identityhub_users;User Id=sa;Password=IdentityHub123!;TrustServerCertificate=True;MultipleActiveResultSets=True"
+    ports:
+      - "5094:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    restart: on-failure
+
+  authservice:
+    build:
+      context: .
+      dockerfile: src/AuthService/IdentityHub.AuthService.Api/Dockerfile
+    container_name: identityhub-authservice
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__SqlServer: "Server=sqlserver,1433;Database=identityhub_auth;User Id=sa;Password=IdentityHub123!;TrustServerCertificate=True;MultipleActiveResultSets=True"
+      Services__UserService: "http://userservice:8080"
+      Jwt__Key: "IdentityHubDevelopmentJwtKey-ChangeThisInProduction-2026"
+      Jwt__Issuer: "IdentityHub.AuthService"
+      Jwt__Audience: "IdentityHub"
+    ports:
+      - "5029:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      userservice:
+        condition: service_started
+    restart: on-failure
+
+volumes:
+  identityhub-sqlserver-data:

@@ -1,5 +1,12 @@
 <Solution>
   <Folder Name="/src/" />
+  <Folder Name="/src/AuthService/">
+    <Project Path="src/AuthService/IdentityHub.AuthService.Api/IdentityHub.AuthService.Api.csproj" />
+    <Project Path="src/AuthService/IdentityHub.AuthService.Application/IdentityHub.AuthService.Application.csproj" />
+    <Project Path="src/AuthService/IdentityHub.AuthService.Domain/IdentityHub.AuthService.Domain.csproj" />
+    <Project Path="src/AuthService/IdentityHub.AuthService.Infrastructure/IdentityHub.AuthService.Infrastructure.csproj" />
+    <Project Path="src/AuthService/IdentityHub.AuthService.Tests/IdentityHub.AuthService.Tests.csproj" />
+  </Folder>
   <Folder Name="/src/UserService/">
     <Project Path="src/UserService/IdentityHub.UserService.Api/IdentityHub.UserService.Api.csproj" />
     <Project Path="src/UserService/IdentityHub.UserService.Application/IdentityHub.UserService.Application.csproj" />

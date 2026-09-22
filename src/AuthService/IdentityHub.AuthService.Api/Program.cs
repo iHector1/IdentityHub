@@ -1,0 +1,189 @@
+using System.Text;
+using IdentityHub.AuthService.Application.Abstractions;
+using IdentityHub.AuthService.Application.Auth;
+using IdentityHub.AuthService.Domain.Entities;
+using IdentityHub.AuthService.Infrastructure.Persistence;
+using IdentityHub.AuthService.Infrastructure.Repositories;
+using IdentityHub.AuthService.Infrastructure.Security;
+using IdentityHub.AuthService.Infrastructure.Clients;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddOpenApi();
+
+builder.Services.AddDbContext<AuthDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("SqlServer")
+));
+
+builder.Services.AddScoped<ICredentialRepository, EfCredentialRepository>();
+builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
+builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+builder.Services.AddHttpClient<IUserServiceClient, UserServiceClient>(client =>
+{
+    var userServiceUrl = builder.Configuration["Services:UserService"]
+        ?? throw new InvalidOperationException("UserService URL is not configured.");
+
+    client.BaseAddress = new Uri(userServiceUrl);
+});
+
+var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT key is not configured.");
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtKey)
+            ),
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
+
+app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapPost("/api/auth/register", async (
+    RegisterRequest request,
+    ICredentialRepository credentialRepository,
+    IPasswordHasher passwordHasher,
+    IUserServiceClient userServiceClient) =>
+{
+    var user = await userServiceClient.GetByIdAsync(request.UserId);
+
+    if (user is null)
+    {
+        return Results.BadRequest("The specified user does not exist.");
+    }
+
+    if (!user.IsActive)
+    {
+        return Results.BadRequest("The user is inactive.");
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Email))
+    {
+        return Results.BadRequest("Email is required.");
+    }
+
+    var normalizedRequestEmail = request.Email.Trim().ToLowerInvariant();
+    var normalizedUserEmail = user.Email.Trim().ToLowerInvariant();
+
+    if (normalizedRequestEmail != normalizedUserEmail)
+    {
+        return Results.BadRequest("The email does not match the specified user.");
+    }
+
+    var existingCredential =
+        await credentialRepository.GetByEmailAsync(normalizedRequestEmail);
+
+    if (existingCredential is not null)
+    {
+        return Results.Conflict(
+            $"Credentials for '{request.Email}' already exist."
+        );
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Password) ||
+        request.Password.Length < 8)
+    {
+        return Results.BadRequest(
+            "Password must contain at least 8 characters."
+        );
+    }
+
+    var passwordHash = passwordHasher.Hash(request.Password);
+
+    var credential = new UserCredential(
+        request.UserId,
+        normalizedRequestEmail,
+        passwordHash
+    );
+
+    await credentialRepository.AddAsync(credential);
+
+    return Results.Created(
+        $"/api/auth/credentials/{credential.Id}",
+        new
+        {
+            credential.Id,
+            credential.UserId,
+            credential.Email,
+            credential.CreatedAt
+        }
+    );
+
+});
+
+app.MapPost("/api/auth/login", async (
+    LoginRequest request,
+    ICredentialRepository credentialRepository,
+    IPasswordHasher passwordHasher,
+    IJwtTokenGenerator jwtTokenGenerator) =>
+
+{
+    var credential =
+        await credentialRepository.GetByEmailAsync(request.Email);
+
+    if (credential is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var validPassword = passwordHasher.Verify(
+
+        request.Password,
+
+        credential.PasswordHash
+    );
+
+    if (!validPassword)
+    {
+        return Results.Unauthorized();
+    }
+
+    var token = jwtTokenGenerator.Generate(credential);
+
+    return Results.Ok(
+        new AuthResponse(
+         token,
+         DateTime.UtcNow.AddMinutes(60)
+        )
+    );
+
+});
+
+app.MapGet("/api/auth/me", () =>
+{
+    return Results.Ok(new
+    {
+        Message = "You are authenticated."
+    });
+
+}).RequireAuthorization();
+
+app.Run();
