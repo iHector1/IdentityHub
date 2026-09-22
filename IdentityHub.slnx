@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/UserService/">
+    <Project Path="src/UserService/IdentityHub.UserService.Api/IdentityHub.UserService.Api.csproj" />
+    <Project Path="src/UserService/IdentityHub.UserService.Application/IdentityHub.UserService.Application.csproj" />
+    <Project Path="src/UserService/IdentityHub.UserService.Domain/IdentityHub.UserService.Domain.csproj" />
+    <Project Path="src/UserService/IdentityHub.UserService.Infrastructure/IdentityHub.UserService.Infrastructure.csproj" />
+    <Project Path="src/UserService/IdentityHub.UserService.Tests/IdentityHub.UserService.Tests.csproj" />
+  </Folder>
+</Solution>
