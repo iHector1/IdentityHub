@@ -40,11 +40,17 @@ packages/
 *.bak
 
 # Local development configuration and secrets
+.env
 appsettings.Local.json
 appsettings.*.Local.json
 secrets.json
 *.pfx
 *.p12
+
+# Frontend dependencies and generated output
+src/Frontend/node_modules/
+src/Frontend/dist/
+src/Frontend/.angular/
 
 # Local databases
 *.db

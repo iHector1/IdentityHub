@@ -16,6 +16,10 @@ using Serilog.Formatting.Compact;
 using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
+    policy.WithOrigins("http://localhost:4200")
+        .AllowAnyHeader()
+        .AllowAnyMethod()));
 builder.Host.UseSerilog((context, services, configuration) =>
 {
     configuration
@@ -98,6 +102,7 @@ app.UseSerilogRequestLogging(options =>
 });
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
+app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<UserLogContextMiddleware>();
