@@ -25,11 +25,15 @@ public sealed class RagServiceTests
             new[] { new RetrievedChunk("roleservice.md", "RoleService", 0, "Roles are assigned after checking the user.", 0.91) },
             chat);
 
-        await service.AskAsync("How does role assignment work?");
+        var result = await service.AskAsync("How does role assignment work?");
 
         Assert.NotNull(chat.UserPrompt);
         Assert.Contains("Roles are assigned", chat.UserPrompt);
         Assert.Contains("How does role assignment work?", chat.UserPrompt);
+        Assert.Equal(12, result.Usage.InputTokens);
+        Assert.Equal(8, result.Usage.OutputTokens);
+        Assert.Equal(20, result.Usage.TotalTokens);
+        Assert.Null(result.Usage.EstimatedCost);
     }
 
     [Fact]

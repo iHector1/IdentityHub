@@ -35,6 +35,7 @@ flowchart LR
     Users -->|cache miss| SQL
     AI -->|búsqueda de contexto| Qdrant
     AI -->|embeddings y respuesta| OpenAI
+    AI -->|REST interno: resumen de usuario| Users
 ```
 
 UserService usa Redis como caché distribuida para `GET /api/users/{id}`. SQL Server sigue siendo la fuente de verdad cuando hay un cache miss o Redis no está disponible.
@@ -72,3 +73,7 @@ UserService busca primero en Redis. Si no encuentra el usuario o Redis falla, co
 ### RAG
 
 La pregunta se convierte en un embedding. Qdrant busca los fragmentos más relacionados y AIService envía la pregunta junto con ese contexto a OpenAI para generar la respuesta.
+
+### Resumen de usuario con AI
+
+AIService consulta `GET /internal/users/{id}` en UserService usando `X-Internal-Api-Key`. Para `GET /api/ai/users/{userId}/summary` solo envía a OpenAI el identificador, email y estado activo del usuario.

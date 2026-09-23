@@ -83,6 +83,30 @@ public sealed class CachedUserServiceTests
         Assert.Equal(1, repository.GetByIdCalls);
     }
 
+    [Fact]
+    public async Task GetByIdAsync_WhenCacheEntryIsInvalid_ShouldUseRepository()
+    {
+        var user = CreateUser();
+        var cache = new FakeDistributedCache();
+        await cache.SetStringAsync($"user:{user.Id}", "not-json");
+        var repository = new TestUserRepository(user);
+        var service = CreateService(repository, cache);
+
+        var result = await service.GetByIdAsync(user.Id);
+
+        Assert.Equal(user.Id, result!.Id);
+        Assert.Equal(1, repository.GetByIdCalls);
+    }
+
+    [Fact]
+    public async Task InvalidateAsync_WhenRedisFails_ShouldNotThrow()
+    {
+        var cache = new FakeDistributedCache { ThrowOnRemove = true };
+        var service = CreateService(new TestUserRepository(CreateUser()), cache);
+
+        await service.InvalidateAsync(Guid.NewGuid());
+    }
+
     private static CachedUserService CreateService(
         TestUserRepository repository,
         FakeDistributedCache cache) =>
@@ -115,6 +139,7 @@ public sealed class CachedUserServiceTests
 
         public bool ThrowOnGet { get; init; }
         public bool ThrowOnSet { get; init; }
+        public bool ThrowOnRemove { get; init; }
 
         public byte[]? Get(string key)
         {
@@ -144,7 +169,11 @@ public sealed class CachedUserServiceTests
         public void Refresh(string key) { }
         public Task RefreshAsync(string key, CancellationToken token = default) => Task.CompletedTask;
 
-        public void Remove(string key) => values.TryRemove(key, out _);
+        public void Remove(string key)
+        {
+            if (ThrowOnRemove) throw new InvalidOperationException("Redis unavailable.");
+            values.TryRemove(key, out _);
+        }
         public Task RemoveAsync(string key, CancellationToken token = default)
         {
             Remove(key);

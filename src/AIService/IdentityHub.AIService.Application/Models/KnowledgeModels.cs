@@ -30,6 +30,14 @@ public sealed record AiUsage(
     int? TotalTokens,
     decimal? EstimatedCost);
 
+public sealed record AiUserInfo(Guid Id, string Email, bool IsActive);
+
+public sealed record AiUserSummary(
+    Guid UserId,
+    string Answer,
+    long LatencyMs,
+    AiUsage Usage);
+
 public sealed record AiAnswer(
     string Answer,
     IReadOnlyCollection<string> Sources,

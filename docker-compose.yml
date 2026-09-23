@@ -126,6 +126,8 @@ services:
       OpenAI__EmbeddingModel: "text-embedding-3-small"
       OpenAI__InputCostPerMillionTokens: "${OPENAI_INPUT_COST_PER_MILLION_TOKENS:-}"
       OpenAI__OutputCostPerMillionTokens: "${OPENAI_OUTPUT_COST_PER_MILLION_TOKENS:-}"
+      Services__UserService: "http://userservice:8080"
+      InternalServices__ApiKey: "IdentityHub-Internal-Development-Key-2026"
       Qdrant__Url: "http://qdrant:6333"
       Qdrant__CollectionName: "identityhub_knowledge"
       Jwt__Key: "IdentityHubDevelopmentJwtKey-ChangeThisInProduction-2026"
@@ -135,6 +137,8 @@ services:
       - "5090:8080"
     depends_on:
       qdrant:
+        condition: service_started
+      userservice:
         condition: service_started
     restart: on-failure
   frontend:

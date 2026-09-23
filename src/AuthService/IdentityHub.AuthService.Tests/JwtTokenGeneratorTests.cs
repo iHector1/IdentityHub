@@ -68,6 +68,18 @@ public sealed class JwtTokenGeneratorTests
         Assert.ThrowsAny<SecurityTokenException>(() => Validate(token, Key, Issuer, "wrong-audience"));
     }
 
+    [Fact]
+    public void Generate_WhenKeyIsMissing_ShouldFailClearly()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+        var generator = new JwtTokenGenerator(configuration);
+        var credential = new UserCredential(Guid.NewGuid(), "user@example.com", "hash");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => generator.Generate(credential));
+
+        Assert.Contains("JWT key", exception.Message);
+    }
+
     private static IConfiguration CreateConfiguration() =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
