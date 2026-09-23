@@ -2,8 +2,18 @@
   "info": {
     "_postman_id": "b7d1d92c-8d5f-4f9e-b6dd-identityhub",
     "name": "IdentityHub API",
-    "description": "Coleccion para probar UserService, AuthService, RoleService y AuditService.",
+    "description": "Coleccion para probar UserService, AuthService, RoleService y AuditService. Las solicitudes protegidas heredan el JWT de la variable token.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
   },
   "variable": [
     {

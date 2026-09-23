@@ -1,10 +1,13 @@
+using System.Text;
 using IdentityHub.UserService.Application.Abstractions;
 using IdentityHub.UserService.Application.Users;
 using IdentityHub.UserService.Domain.Entities;
 using IdentityHub.UserService.Infrastructure.Repositories;
 using IdentityHub.UserService.Infrastructure.Persistence;
 using IdentityHub.UserService.Infrastructure.Messaging;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
@@ -15,6 +18,30 @@ builder.Services.AddDbContext<UserDbContext>(options =>
 
 builder.Services.AddScoped<IUserRepository, EfUserRepository>();
 builder.Services.AddScoped<IIntegrationEventPublisher, RabbitMqEventPublisher>();
+
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? throw new InvalidOperationException("JWT key is not configured.");
+var jwtIssuer = builder.Configuration["Jwt:Issuer"]
+    ?? throw new InvalidOperationException("JWT issuer is not configured.");
+var jwtAudience = builder.Configuration["Jwt:Audience"]
+    ?? throw new InvalidOperationException("JWT audience is not configured.");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+builder.Services.AddAuthorization();
 
 
 var app = builder.Build();
@@ -30,17 +57,40 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGet("/api/users", async (IUserRepository userRepository) =>
 {
     var users = await userRepository.GetAllAsync();
     return Results.Ok(users);
-});
+}).RequireAuthorization();
 
 app.MapGet("/api/users/{id:guid}", async (Guid id, IUserRepository userRepository) =>
 {
     var user = await userRepository.GetByIdAsync(id);
     return user is not null ? Results.Ok(user) : Results.NotFound();
+});
+
+app.MapGet("/internal/users/{id:guid}", async (
+    Guid id,
+    HttpRequest request,
+    IConfiguration configuration,
+    IUserRepository userRepository) =>
+{
+    var expectedApiKey = configuration["InternalServices:ApiKey"];
+    var providedApiKey = request.Headers["X-Internal-Api-Key"].ToString();
+
+    if (string.IsNullOrWhiteSpace(expectedApiKey) ||
+        !string.Equals(providedApiKey, expectedApiKey, StringComparison.Ordinal))
+    {
+        return Results.Unauthorized();
+    }
+
+    var user = await userRepository.GetByIdAsync(id);
+    return user is null
+        ? Results.NotFound()
+        : Results.Ok(new { user.Id, user.Email, user.IsActive });
 });
 
 app.MapPost("/api/users", async (CreateUserRequest request, IUserRepository userRepository, IIntegrationEventPublisher eventPublisher) =>
@@ -86,7 +136,7 @@ app.MapPut("/api/users/{id:guid}", async (Guid id, UpdateUserRequest request, IU
     );
     await userRepository.UpdateAsync(user);
     return Results.Ok(user);
-});
+}).RequireAuthorization();
 
 app.MapDelete("/api/users/{id:guid}", async (Guid id, IUserRepository userRepository) =>
 {
@@ -98,6 +148,6 @@ app.MapDelete("/api/users/{id:guid}", async (Guid id, IUserRepository userReposi
 
     await userRepository.DeleteAsync(user);
     return Results.NoContent();
-});
+}).RequireAuthorization();
 
 app.Run();
