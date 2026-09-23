@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using IdentityHub.AIService.Application.Abstractions;
 using IdentityHub.AIService.Application.Models;
+using IdentityHub.AIService.Application.Options;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace IdentityHub.AIService.Application.Services;
 
@@ -10,7 +12,8 @@ public sealed class RagService(
     IEmbeddingService embeddingService,
     IVectorStore vectorStore,
     IChatService chatService,
-    ILogger<RagService> logger)
+    ILogger<RagService> logger,
+    IOptions<OpenAiCostOptions> costOptions)
 {
     private const int RetrievalLimit = 5;
     private const string NoKnowledgeAnswer = "The information is not available in the indexed knowledge.";
@@ -72,33 +75,70 @@ public sealed class RagService(
         {
             stopwatch.Stop();
             logger.LogInformation(
-                "RAG question completed without context {EmbeddingMs} ms embedding, {VectorSearchMs} ms vector search, {TotalLatencyMs} ms total, {ChunksUsed} chunks",
+                "RAG question completed without context {EmbeddingMs} ms embedding, {VectorSearchMs} ms vector search, {TotalLatencyMs} ms total, {ChunksUsed} chunks, quality {Quality}",
                 embeddingStopwatch.ElapsedMilliseconds,
                 searchStopwatch.ElapsedMilliseconds,
                 stopwatch.ElapsedMilliseconds,
-                0);
-            return new AiAnswer(NoKnowledgeAnswer, Array.Empty<string>(), stopwatch.ElapsedMilliseconds);
+                0,
+                "NoContext");
+            return new AiAnswer(
+                NoKnowledgeAnswer,
+                Array.Empty<string>(),
+                stopwatch.ElapsedMilliseconds,
+                new AiUsage(null, null, null, null),
+                "NoContext");
         }
 
         var generationStopwatch = Stopwatch.StartNew();
-        var answer = await chatService.GenerateAsync(
+        var chatResult = await chatService.GenerateAsync(
             RagPromptBuilder.SystemPrompt,
             RagPromptBuilder.BuildUserPrompt(question.Trim(), retrieved),
             cancellationToken);
         generationStopwatch.Stop();
         stopwatch.Stop();
 
+        var estimatedCost = EstimateCost(chatResult);
+        const string quality = "Grounded";
+
         var sources = retrieved
             .Select(chunk => chunk.Source)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         logger.LogInformation(
-            "RAG question completed {EmbeddingMs} ms embedding, {VectorSearchMs} ms vector search, {GenerationMs} ms generation, {TotalLatencyMs} ms total, {ChunksUsed} chunks",
+            "RAG question completed {EmbeddingMs} ms embedding, {VectorSearchMs} ms vector search, {GenerationMs} ms generation, {TotalLatencyMs} ms total, {ChunksUsed} chunks, quality {Quality}, {InputTokens} input tokens, {OutputTokens} output tokens, {TotalTokens} total tokens, {EstimatedCost} estimated cost",
             embeddingStopwatch.ElapsedMilliseconds,
             searchStopwatch.ElapsedMilliseconds,
             generationStopwatch.ElapsedMilliseconds,
             stopwatch.ElapsedMilliseconds,
-            retrieved.Length);
-        return new AiAnswer(answer, sources, stopwatch.ElapsedMilliseconds);
+            retrieved.Length,
+            quality,
+            chatResult.InputTokens,
+            chatResult.OutputTokens,
+            chatResult.TotalTokens,
+            estimatedCost);
+        return new AiAnswer(
+            chatResult.Text,
+            sources,
+            stopwatch.ElapsedMilliseconds,
+            new AiUsage(
+                chatResult.InputTokens,
+                chatResult.OutputTokens,
+                chatResult.TotalTokens,
+                estimatedCost),
+            quality);
+    }
+
+    private decimal? EstimateCost(ChatResult chatResult)
+    {
+        var pricing = costOptions.Value;
+        if (pricing.InputCostPerMillionTokens is not { } inputPrice ||
+            pricing.OutputCostPerMillionTokens is not { } outputPrice ||
+            chatResult.InputTokens is not { } inputTokens ||
+            chatResult.OutputTokens is not { } outputTokens)
+        {
+            return null;
+        }
+
+        return inputTokens / 1_000_000m * inputPrice + outputTokens / 1_000_000m * outputPrice;
     }
 }

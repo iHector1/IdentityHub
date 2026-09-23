@@ -16,7 +16,7 @@ La arquitectura y los flujos principales están documentados en [docs/architectu
 - **AuthService:** gestiona credenciales, login y generación de JWT. Las contraseñas se almacenan con BCrypt.
 - **RoleService:** gestiona roles y sus asignaciones. Valida usuarios consultando UserService.
 - **AuditService:** consume eventos por RabbitMQ y los almacena en MongoDB.
-- **AIService:** implementa RAG con embeddings, Qdrant y OpenAI.
+- **AIService:** implementa RAG con embeddings, Qdrant y OpenAI, con métricas de latencia, tokens, costo configurable y calidad básica del contexto.
 - **Frontend:** aplicación Angular que consume las APIs por HTTP.
 
 ## Tecnologías
@@ -91,6 +91,8 @@ npm install
 npm run build
 npm test -- --watch=false
 ```
+
+El frontend usa Angular Signals para el estado de autenticación. El detalle de cobertura backend está en [docs/test-coverage.md](docs/test-coverage.md).
 
 ## Endpoints principales
 

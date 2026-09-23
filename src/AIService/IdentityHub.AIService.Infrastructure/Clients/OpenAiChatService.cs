@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using IdentityHub.AIService.Application.Abstractions;
+using IdentityHub.AIService.Application.Models;
 using IdentityHub.AIService.Infrastructure.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -13,7 +14,7 @@ public sealed class OpenAiChatService(
     IOptions<OpenAiOptions> options,
     ILogger<OpenAiChatService> logger) : IChatService
 {
-    public async Task<string> GenerateAsync(
+    public async Task<ChatResult> GenerateAsync(
         string systemPrompt,
         string userPrompt,
         CancellationToken cancellationToken = default)
@@ -41,13 +42,21 @@ public sealed class OpenAiChatService(
         }
 
         using var document = JsonDocument.Parse(body);
-        if (document.RootElement.TryGetProperty("output_text", out var outputText) &&
-            !string.IsNullOrWhiteSpace(outputText.GetString()))
-        {
-            return outputText.GetString()!;
-        }
+        var root = document.RootElement;
+        var usage = root.TryGetProperty("usage", out var usageElement)
+            ? new ChatResultUsage(
+                TryGetTokenCount(usageElement, "input_tokens"),
+                TryGetTokenCount(usageElement, "output_tokens"),
+                TryGetTokenCount(usageElement, "total_tokens"))
+            : new ChatResultUsage(null, null, null);
 
-        var text = document.RootElement.TryGetProperty("output", out var output)
+        var outputText = root.TryGetProperty("output_text", out var outputTextElement)
+            ? outputTextElement.GetString()
+            : null;
+        if (!string.IsNullOrWhiteSpace(outputText))
+            return new ChatResult(outputText, usage.InputTokens, usage.OutputTokens, usage.TotalTokens);
+
+        var text = root.TryGetProperty("output", out var output)
             ? output.EnumerateArray()
                 .Where(item => item.TryGetProperty("content", out _))
                 .SelectMany(item => item.GetProperty("content").EnumerateArray())
@@ -58,6 +67,13 @@ public sealed class OpenAiChatService(
 
         return string.IsNullOrWhiteSpace(text)
             ? throw new InvalidOperationException("OpenAI returned no text output.")
-            : text;
+            : new ChatResult(text, usage.InputTokens, usage.OutputTokens, usage.TotalTokens);
     }
+
+    private static int? TryGetTokenCount(JsonElement usage, string propertyName) =>
+        usage.TryGetProperty(propertyName, out var value) && value.TryGetInt32(out var tokenCount)
+            ? tokenCount
+            : null;
+
+    private sealed record ChatResultUsage(int? InputTokens, int? OutputTokens, int? TotalTokens);
 }

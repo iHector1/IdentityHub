@@ -124,6 +124,8 @@ services:
       OpenAI__ApiKey: "${OPENAI_API_KEY:-}"
       OpenAI__Model: "gpt-5.6-luna"
       OpenAI__EmbeddingModel: "text-embedding-3-small"
+      OpenAI__InputCostPerMillionTokens: "${OPENAI_INPUT_COST_PER_MILLION_TOKENS:-}"
+      OpenAI__OutputCostPerMillionTokens: "${OPENAI_OUTPUT_COST_PER_MILLION_TOKENS:-}"
       Qdrant__Url: "http://qdrant:6333"
       Qdrant__CollectionName: "identityhub_knowledge"
       Jwt__Key: "IdentityHubDevelopmentJwtKey-ChangeThisInProduction-2026"

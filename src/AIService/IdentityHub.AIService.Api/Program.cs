@@ -103,7 +103,15 @@ protectedApi.MapPost("/ask", async (
         {
             result.Answer,
             result.Sources,
-            result.LatencyMs
+            result.LatencyMs,
+            result.Quality,
+            Usage = new
+            {
+                result.Usage.InputTokens,
+                result.Usage.OutputTokens,
+                result.Usage.TotalTokens,
+                result.Usage.EstimatedCost
+            }
         });
     }
     catch (ArgumentException exception)

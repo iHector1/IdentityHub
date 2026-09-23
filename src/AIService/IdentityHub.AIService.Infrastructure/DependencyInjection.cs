@@ -1,4 +1,5 @@
 using IdentityHub.AIService.Application.Abstractions;
+using IdentityHub.AIService.Application.Options;
 using IdentityHub.AIService.Infrastructure.Clients;
 using IdentityHub.AIService.Infrastructure.Knowledge;
 using IdentityHub.AIService.Infrastructure.Options;
@@ -21,6 +22,7 @@ public static class DependencyInjection
                 ? configuredApiKey
                 : configuration["OPENAI_API_KEY"] ?? options.ApiKey;
         });
+        services.Configure<OpenAiCostOptions>(configuration.GetSection(OpenAiCostOptions.SectionName));
         services.Configure<QdrantOptions>(configuration.GetSection(QdrantOptions.SectionName));
 
         services.AddSingleton<IKnowledgeDocumentReader, FileKnowledgeDocumentReader>();

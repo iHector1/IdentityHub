@@ -18,6 +18,23 @@ public sealed record RetrievedChunk(
     string Text,
     double Score);
 
-public sealed record AiAnswer(string Answer, IReadOnlyCollection<string> Sources, long LatencyMs);
+public sealed record ChatResult(
+    string Text,
+    int? InputTokens,
+    int? OutputTokens,
+    int? TotalTokens);
+
+public sealed record AiUsage(
+    int? InputTokens,
+    int? OutputTokens,
+    int? TotalTokens,
+    decimal? EstimatedCost);
+
+public sealed record AiAnswer(
+    string Answer,
+    IReadOnlyCollection<string> Sources,
+    long LatencyMs,
+    AiUsage Usage,
+    string Quality);
 
 public sealed record IndexResult(int DocumentsIndexed, int ChunksIndexed, long LatencyMs);

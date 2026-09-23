@@ -7,5 +7,6 @@
   <ItemGroup>
     <ProjectReference Include="..\IdentityHub.AIService.Domain\IdentityHub.AIService.Domain.csproj" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.9" />
   </ItemGroup>
 </Project>
