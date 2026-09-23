@@ -2,14 +2,30 @@ using System.Text;
 using IdentityHub.AuditService.Application.Abstractions;
 using IdentityHub.AuditService.Infrastructure.Messaging;
 using IdentityHub.AuditService.Infrastructure.Repositories;
+using IdentityHub.AuditService.Api.Health;
+using IdentityHub.AuditService.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
+using Serilog.Formatting.Compact;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("ServiceName", "AuditService")
+        .WriteTo.Console(new RenderedCompactJsonFormatter());
+});
 
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton<IAuditRepository, MongoAuditRepository>();
 builder.Services.AddHostedService<RabbitMqAuditConsumer>();
+builder.Services.AddHealthChecks()
+    .AddCheck<MongoDbHealthCheck>("mongodb");
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("JWT key is not configured.");
@@ -40,9 +56,29 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("RequestMethod", httpContext.Request.Method);
+        diagnosticContext.Set("RequestPath", httpContext.Request.Path.Value ?? "/");
+        diagnosticContext.Set("StatusCode", httpContext.Response.StatusCode);
+
+        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? httpContext.User.FindFirst("sub")?.Value;
+        if (!string.IsNullOrWhiteSpace(userId))
+            diagnosticContext.Set("UserId", userId);
+    };
+});
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<UserLogContextMiddleware>();
+
+app.MapHealthChecks("/health").AllowAnonymous();
 
 var protectedApi = app.MapGroup("/api").RequireAuthorization();
 

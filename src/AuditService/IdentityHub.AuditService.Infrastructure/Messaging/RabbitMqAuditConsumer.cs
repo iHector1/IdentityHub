@@ -68,6 +68,11 @@ public sealed class RabbitMqAuditConsumer(
 
                 var auditEvent = ToAuditEvent(integrationEvent);
                 auditRepository.AddAsync(auditEvent).GetAwaiter().GetResult();
+                logger.LogInformation(
+                    "Audit event persisted {EventType} from {SourceService} with {CorrelationId}",
+                    integrationEvent.EventType,
+                    integrationEvent.ServiceName,
+                    integrationEvent.CorrelationId);
                 channel.BasicAck(arguments.DeliveryTag, multiple: false);
             }
             catch (Exception exception)
