@@ -3,6 +3,7 @@ using IdentityHub.UserService.Application.Users;
 using IdentityHub.UserService.Domain.Entities;
 using IdentityHub.UserService.Infrastructure.Repositories;
 using IdentityHub.UserService.Infrastructure.Persistence;
+using IdentityHub.UserService.Infrastructure.Messaging;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +14,7 @@ builder.Services.AddDbContext<UserDbContext>(options =>
     ));
 
 builder.Services.AddScoped<IUserRepository, EfUserRepository>();
+builder.Services.AddScoped<IIntegrationEventPublisher, RabbitMqEventPublisher>();
 
 
 var app = builder.Build();
@@ -41,7 +43,7 @@ app.MapGet("/api/users/{id:guid}", async (Guid id, IUserRepository userRepositor
     return user is not null ? Results.Ok(user) : Results.NotFound();
 });
 
-app.MapPost("/api/users", async (CreateUserRequest request, IUserRepository userRepository) =>
+app.MapPost("/api/users", async (CreateUserRequest request, IUserRepository userRepository, IIntegrationEventPublisher eventPublisher) =>
 {
     var existingUser = await userRepository.GetByEmailAsync(request.Email);
     if (existingUser is not null)
@@ -51,6 +53,15 @@ app.MapPost("/api/users", async (CreateUserRequest request, IUserRepository user
 
     var newUser = new User(request.FirstName, request.LastName, request.Email);
     await userRepository.AddAsync(newUser);
+    await eventPublisher.PublishAsync(new IntegrationEvent(
+        Guid.NewGuid(), "UserCreated", "UserService", DateTime.UtcNow, null,
+        new Dictionary<string, object?>
+        {
+            ["UserId"] = newUser.Id,
+            ["FirstName"] = newUser.FirstName,
+            ["LastName"] = newUser.LastName,
+            ["Email"] = newUser.Email
+        }));
     return Results.Created($"/api/users/{newUser.Id}", newUser);
 });
 
@@ -90,4 +101,3 @@ app.MapDelete("/api/users/{id:guid}", async (Guid id, IUserRepository userReposi
 });
 
 app.Run();
-

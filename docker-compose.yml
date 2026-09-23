@@ -27,6 +27,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__SqlServer: "Server=sqlserver,1433;Database=identityhub_users;User Id=sa;Password=IdentityHub123!;TrustServerCertificate=True;MultipleActiveResultSets=True"
+      RabbitMQ__ConnectionString: "amqp://guest:guest@rabbitmq:5672/"
     ports:
       - "5094:8080"
     depends_on:
@@ -47,6 +48,7 @@ services:
       Jwt__Key: "IdentityHubDevelopmentJwtKey-ChangeThisInProduction-2026"
       Jwt__Issuer: "IdentityHub.AuthService"
       Jwt__Audience: "IdentityHub"
+      RabbitMQ__ConnectionString: "amqp://guest:guest@rabbitmq:5672/"
     ports:
       - "5029:8080"
     depends_on:
@@ -56,5 +58,74 @@ services:
         condition: service_started
     restart: on-failure
 
+  roleservice:
+    build:
+      context: .
+      dockerfile: src/RoleService/IdentityHub.RoleService.Api/Dockerfile
+    container_name: identityhub-roleservice
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__SqlServer: "Server=sqlserver,1433;Database=identityhub_roles;User Id=sa;Password=IdentityHub123!;TrustServerCertificate=True;MultipleActiveResultSets=True"
+      Services__UserService: "http://userservice:8080"
+      RabbitMQ__ConnectionString: "amqp://guest:guest@rabbitmq:5672/"
+    ports:
+      - "5070:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      userservice:
+        condition: service_started
+    restart: on-failure
+
+  auditservice:
+    build:
+      context: .
+      dockerfile: src/AuditService/IdentityHub.AuditService.Api/Dockerfile
+    container_name: identityhub-auditservice
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      MongoDB__ConnectionString: "mongodb://mongodb:27017"
+      MongoDB__DatabaseName: "identityhub_audit"
+      RabbitMQ__ConnectionString: "amqp://guest:guest@rabbitmq:5672/"
+    ports:
+      - "5080:8080"
+    depends_on:
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  mongodb:
+    image: mongo:7
+    container_name: identityhub-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - identityhub-mongodb-data:/data/db
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: identityhub-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - identityhub-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
 volumes:
   identityhub-sqlserver-data:
+  identityhub-mongodb-data:
+  identityhub-rabbitmq-data:

@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "b7d1d92c-8d5f-4f9e-b6dd-identityhub",
     "name": "IdentityHub API",
-    "description": "Coleccion para probar UserService y AuthService.",
+    "description": "Coleccion para probar UserService, AuthService, RoleService y AuditService.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -13,6 +13,14 @@
     {
       "key": "authServiceUrl",
       "value": "http://localhost:5029"
+    },
+    {
+      "key": "roleServiceUrl",
+      "value": "http://localhost:5070"
+    },
+    {
+      "key": "auditServiceUrl",
+      "value": "http://localhost:5080"
     },
     {
       "key": "userId",
@@ -28,6 +36,14 @@
     },
     {
       "key": "token",
+      "value": ""
+    },
+    {
+      "key": "roleId",
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "key": "auditId",
       "value": ""
     }
   ],
@@ -307,6 +323,297 @@
               ]
             },
             "description": "Ejecutar despues de Login."
+          }
+        }
+      ]
+    },
+    {
+      "name": "RoleService",
+      "item": [
+        {
+          "name": "Crear rol",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Administrator\",\n  \"description\": \"Acceso administrativo\"\n}"
+            },
+            "url": {
+              "raw": "{{roleServiceUrl}}/api/roles",
+              "host": [
+                "{{roleServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "roles"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const role = pm.response.json();",
+                  "    pm.collectionVariables.set('roleId', role.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{roleServiceUrl}}/api/roles",
+              "host": [
+                "{{roleServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "roles"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener rol",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{roleServiceUrl}}/api/roles/{{roleId}}",
+              "host": [
+                "{{roleServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{roleId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar rol",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Administrator\",\n  \"description\": \"Acceso administrativo actualizado\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{roleServiceUrl}}/api/roles/{{roleId}}",
+              "host": [
+                "{{roleServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{roleId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Desactivar rol",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{roleServiceUrl}}/api/roles/{{roleId}}",
+              "host": [
+                "{{roleServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{roleId}}"
+              ]
+            },
+            "description": "Desactiva el rol en lugar de eliminarlo físicamente."
+          }
+        },
+        {
+          "name": "Asignar rol a usuario",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{roleServiceUrl}}/api/roles/{{roleId}}/users/{{userId}}",
+              "host": [
+                "{{roleServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{roleId}}",
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "Requiere ejecutar antes Crear usuario y Crear rol."
+          }
+        },
+        {
+          "name": "Consultar roles de usuario",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{roleServiceUrl}}/api/roles/users/{{userId}}",
+              "host": [
+                "{{roleServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "users",
+                "{{userId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Quitar rol a usuario",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{roleServiceUrl}}/api/roles/{{roleId}}/users/{{userId}}",
+              "host": [
+                "{{roleServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{roleId}}",
+                "users",
+                "{{userId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AuditService",
+      "item": [
+        {
+          "name": "Listar auditoría",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{auditServiceUrl}}/api/audit?page=1&pageSize=20",
+              "host": [
+                "{{auditServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.items && response.items.length > 0) {",
+                  "        pm.collectionVariables.set('auditId', response.items[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Obtener evento de auditoría",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{auditServiceUrl}}/api/audit/{{auditId}}",
+              "host": [
+                "{{auditServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit",
+                "{{auditId}}"
+              ]
+            },
+            "description": "Ejecutar después de Listar auditoría."
+          }
+        },
+        {
+          "name": "Consultar auditoría por usuario",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{auditServiceUrl}}/api/audit/user/{{userId}}",
+              "host": [
+                "{{auditServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit",
+                "user",
+                "{{userId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Consultar auditoría por tipo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{auditServiceUrl}}/api/audit/type/RoleAssigned",
+              "host": [
+                "{{auditServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit",
+                "type",
+                "RoleAssigned"
+              ]
+            }
           }
         }
       ]

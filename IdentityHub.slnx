@@ -14,4 +14,18 @@
     <Project Path="src/UserService/IdentityHub.UserService.Infrastructure/IdentityHub.UserService.Infrastructure.csproj" />
     <Project Path="src/UserService/IdentityHub.UserService.Tests/IdentityHub.UserService.Tests.csproj" />
   </Folder>
+  <Folder Name="/src/RoleService/">
+    <Project Path="src/RoleService/IdentityHub.RoleService.Api/IdentityHub.RoleService.Api.csproj" />
+    <Project Path="src/RoleService/IdentityHub.RoleService.Application/IdentityHub.RoleService.Application.csproj" />
+    <Project Path="src/RoleService/IdentityHub.RoleService.Domain/IdentityHub.RoleService.Domain.csproj" />
+    <Project Path="src/RoleService/IdentityHub.RoleService.Infrastructure/IdentityHub.RoleService.Infrastructure.csproj" />
+    <Project Path="src/RoleService/IdentityHub.RoleService.Tests/IdentityHub.RoleService.Tests.csproj" />
+  </Folder>
+  <Folder Name="/src/AuditService/">
+    <Project Path="src/AuditService/IdentityHub.AuditService.Api/IdentityHub.AuditService.Api.csproj" />
+    <Project Path="src/AuditService/IdentityHub.AuditService.Application/IdentityHub.AuditService.Application.csproj" />
+    <Project Path="src/AuditService/IdentityHub.AuditService.Domain/IdentityHub.AuditService.Domain.csproj" />
+    <Project Path="src/AuditService/IdentityHub.AuditService.Infrastructure/IdentityHub.AuditService.Infrastructure.csproj" />
+    <Project Path="src/AuditService/IdentityHub.AuditService.Tests/IdentityHub.AuditService.Tests.csproj" />
+  </Folder>
 </Solution>

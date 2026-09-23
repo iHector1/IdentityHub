@@ -6,6 +6,7 @@ using IdentityHub.AuthService.Infrastructure.Persistence;
 using IdentityHub.AuthService.Infrastructure.Repositories;
 using IdentityHub.AuthService.Infrastructure.Security;
 using IdentityHub.AuthService.Infrastructure.Clients;
+using IdentityHub.AuthService.Infrastructure.Messaging;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -22,6 +23,7 @@ builder.Services.AddDbContext<AuthDbContext>(options =>
 builder.Services.AddScoped<ICredentialRepository, EfCredentialRepository>();
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+builder.Services.AddScoped<IIntegrationEventPublisher, RabbitMqEventPublisher>();
 builder.Services.AddHttpClient<IUserServiceClient, UserServiceClient>(client =>
 {
     var userServiceUrl = builder.Configuration["Services:UserService"]
@@ -143,7 +145,8 @@ app.MapPost("/api/auth/login", async (
     LoginRequest request,
     ICredentialRepository credentialRepository,
     IPasswordHasher passwordHasher,
-    IJwtTokenGenerator jwtTokenGenerator) =>
+    IJwtTokenGenerator jwtTokenGenerator,
+    IIntegrationEventPublisher eventPublisher) =>
 
 {
     var credential =
@@ -151,6 +154,9 @@ app.MapPost("/api/auth/login", async (
 
     if (credential is null)
     {
+        await eventPublisher.PublishAsync(new IntegrationEvent(
+            Guid.NewGuid(), "LoginFailed", "AuthService", DateTime.UtcNow, null,
+            new Dictionary<string, object?> { ["Email"] = request.Email.Trim().ToLowerInvariant() }));
         return Results.Unauthorized();
     }
 
@@ -163,10 +169,25 @@ app.MapPost("/api/auth/login", async (
 
     if (!validPassword)
     {
+        await eventPublisher.PublishAsync(new IntegrationEvent(
+            Guid.NewGuid(), "LoginFailed", "AuthService", DateTime.UtcNow, null,
+            new Dictionary<string, object?>
+            {
+                ["UserId"] = credential.UserId,
+                ["Email"] = credential.Email
+            }));
         return Results.Unauthorized();
     }
 
     var token = jwtTokenGenerator.Generate(credential);
+
+    await eventPublisher.PublishAsync(new IntegrationEvent(
+        Guid.NewGuid(), "LoginSucceeded", "AuthService", DateTime.UtcNow, null,
+        new Dictionary<string, object?>
+        {
+            ["UserId"] = credential.UserId,
+            ["Email"] = credential.Email
+        }));
 
     return Results.Ok(
         new AuthResponse(
