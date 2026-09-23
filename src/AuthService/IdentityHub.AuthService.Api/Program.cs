@@ -15,6 +15,10 @@ using Serilog;
 using Serilog.Formatting.Compact;
 using System.Security.Claims;
 
+const string seedUserEmail = "hectorjosuegc@example.com";
+const string seedUserPassword = "12345";
+var seedUserId = Guid.Parse("3d7fbb77-07f1-4f86-8f01-b3e98e3d4a11");
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
     policy.WithOrigins("http://localhost:4200")
@@ -29,6 +33,11 @@ builder.Host.UseSerilog((context, services, configuration) =>
         .Enrich.WithProperty("ServiceName", "AuthService")
         .WriteTo.Console(new RenderedCompactJsonFormatter());
 });
+
+builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
+    policy.WithOrigins("http://localhost:4200")
+        .AllowAnyHeader()
+        .AllowAnyMethod()));
 
 builder.Services.AddOpenApi();
 
@@ -77,6 +86,18 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
     await dbContext.Database.MigrateAsync();
+
+    if (app.Environment.IsDevelopment() &&
+        !await dbContext.Credentials.AnyAsync(credential => credential.Email == seedUserEmail))
+    {
+        var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+        dbContext.Credentials.Add(new UserCredential(
+            seedUserId,
+            seedUserEmail,
+            passwordHasher.Hash(seedUserPassword)));
+        await dbContext.SaveChangesAsync();
+        app.Logger.LogInformation("Development seed credential created for {UserId} {Email}", seedUserId, seedUserEmail);
+    }
 }
 
 if (app.Environment.IsDevelopment())
@@ -189,6 +210,7 @@ app.MapPost("/api/auth/login", async (
     IPasswordHasher passwordHasher,
     IJwtTokenGenerator jwtTokenGenerator,
     IIntegrationEventPublisher eventPublisher,
+    IUserServiceClient userServiceClient,
     ILogger<Program> logger) =>
 
 {
@@ -220,6 +242,21 @@ app.MapPost("/api/auth/login", async (
             {
                 ["UserId"] = credential.UserId,
                 ["Email"] = credential.Email
+            }));
+        return Results.Unauthorized();
+    }
+
+    var user = await userServiceClient.GetByIdAsync(credential.UserId);
+    if (user is null || !user.IsActive)
+    {
+        logger.LogWarning("Login failed because user is inactive or missing {UserId}", credential.UserId);
+        await eventPublisher.PublishAsync(new IntegrationEvent(
+            Guid.NewGuid(), "LoginFailed", "AuthService", DateTime.UtcNow, null,
+            new Dictionary<string, object?>
+            {
+                ["UserId"] = credential.UserId,
+                ["Email"] = credential.Email,
+                ["Reason"] = "InactiveUser"
             }));
         return Results.Unauthorized();
     }

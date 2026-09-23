@@ -43,14 +43,15 @@ public sealed class InMemoryUserRepositoryTests
     }
 
     [Fact]
-    public async Task DeleteAsync_ShouldRemoveStoredUser()
+    public async Task UpdateAsync_ShouldPersistStatusChange()
     {
         var repository = new InMemoryUserRepository();
         var user = new User("Ana", "García", "ana@example.com");
         await repository.AddAsync(user);
 
-        await repository.DeleteAsync(user);
+        user.Desactivate();
+        await repository.UpdateAsync(user);
 
-        Assert.Null(await repository.GetByIdAsync(user.Id));
+        Assert.False((await repository.GetByIdAsync(user.Id))!.IsActive);
     }
 }

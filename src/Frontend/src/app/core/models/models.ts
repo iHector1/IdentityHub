@@ -59,7 +59,6 @@ export interface AuditPage {
   pageSize: number;
   items: AuditEvent[];
 }
-
 export interface AiAnswer {
   answer: string;
   sources: string[];
