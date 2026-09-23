@@ -42,9 +42,4 @@ public class EfUserRepository : IUserRepository
         await _dbContext.SaveChangesAsync();
     }
 
-    public async Task DeleteAsync(User user)
-    {
-        _dbContext.Users.Remove(user);
-        await _dbContext.SaveChangesAsync();
-    }
 }

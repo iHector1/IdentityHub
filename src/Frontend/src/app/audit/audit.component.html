@@ -1,0 +1,50 @@
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+  <div>
+    <h1 class="page-title h3 mb-1">Audit</h1>
+    <p class="text-muted mb-0">Review persisted audit events.</p>
+  </div>
+</div>
+
+<div class="alert alert-danger" *ngIf="errorMessage">{{ errorMessage }}</div>
+
+<section class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="p-3 border-bottom" *ngIf="loading">Loading...</div>
+    <div class="table-responsive" *ngIf="!loading">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Event</th>
+            <th>Service</th>
+            <th>User</th>
+            <th>Entity</th>
+            <th>Date</th>
+            <th>CorrelationId</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let event of events">
+            <td>{{ event.eventType }}</td>
+            <td>{{ event.serviceName }}</td>
+            <td>{{ event.userId || '-' }}</td>
+            <td>{{ event.entityType || '-' }}{{ event.entityId ? ': ' + event.entityId : '' }}</td>
+            <td>{{ event.occurredAt | date:'medium' }}</td>
+            <td class="text-break">{{ event.correlationId || '-' }}</td>
+          </tr>
+          <tr *ngIf="events.length === 0">
+            <td colspan="6" class="text-center text-muted py-4">No audit events found.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+    <button class="btn btn-outline-secondary btn-sm" type="button" (click)="previousPage()" [disabled]="page === 1 || loading">
+      Previous
+    </button>
+    <span class="text-muted small">Page {{ page }}</span>
+    <button class="btn btn-outline-secondary btn-sm" type="button" (click)="nextPage()" [disabled]="events.length < pageSize || loading">
+      Next
+    </button>
+  </div>
+</section>

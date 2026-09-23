@@ -32,6 +32,11 @@ packages/
 *.nuget.props
 *.nuget.targets
 
+# Angular frontend
+src/Frontend/node_modules/
+src/Frontend/dist/
+src/Frontend/.angular/
+
 # Logs and temporary files
 *.log
 *.tmp

@@ -110,6 +110,20 @@ services:
         condition: service_healthy
     restart: on-failure
 
+  frontend:
+    build:
+      context: ./src/Frontend
+      dockerfile: Dockerfile
+    container_name: identityhub-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - authservice
+      - userservice
+      - roleservice
+      - auditservice
+    restart: on-failure
+
   mongodb:
     image: mongo:7
     container_name: identityhub-mongodb

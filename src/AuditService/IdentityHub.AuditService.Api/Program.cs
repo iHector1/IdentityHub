@@ -21,6 +21,11 @@ builder.Host.UseSerilog((context, services, configuration) =>
         .WriteTo.Console(new RenderedCompactJsonFormatter());
 });
 
+builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
+    policy.WithOrigins("http://localhost:4200")
+        .AllowAnyHeader()
+        .AllowAnyMethod()));
+
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton<IAuditRepository, MongoAuditRepository>();
 builder.Services.AddHostedService<RabbitMqAuditConsumer>();
@@ -74,6 +79,7 @@ app.UseSerilogRequestLogging(options =>
 });
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
+app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<UserLogContextMiddleware>();

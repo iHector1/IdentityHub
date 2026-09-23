@@ -39,9 +39,4 @@ public class InMemoryUserRepository : IUserRepository
         return Task.CompletedTask;
     }
 
-    public Task DeleteAsync(User user)
-    {
-        _users.TryRemove(user.Id, out _);
-        return Task.CompletedTask;
-    }
 }
