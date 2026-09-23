@@ -7,11 +7,24 @@ using IdentityHub.AuthService.Infrastructure.Repositories;
 using IdentityHub.AuthService.Infrastructure.Security;
 using IdentityHub.AuthService.Infrastructure.Clients;
 using IdentityHub.AuthService.Infrastructure.Messaging;
+using IdentityHub.AuthService.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
+using Serilog.Formatting.Compact;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("ServiceName", "AuthService")
+        .WriteTo.Console(new RenderedCompactJsonFormatter());
+});
 
 builder.Services.AddOpenApi();
 
@@ -19,6 +32,8 @@ builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("SqlServer")
 ));
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<AuthDbContext>("sqlserver");
 
 builder.Services.AddScoped<ICredentialRepository, EfCredentialRepository>();
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
@@ -65,15 +80,36 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("RequestMethod", httpContext.Request.Method);
+        diagnosticContext.Set("RequestPath", httpContext.Request.Path.Value ?? "/");
+        diagnosticContext.Set("StatusCode", httpContext.Response.StatusCode);
+
+        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? httpContext.User.FindFirst("sub")?.Value;
+        if (!string.IsNullOrWhiteSpace(userId))
+            diagnosticContext.Set("UserId", userId);
+    };
+});
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<UserLogContextMiddleware>();
+
+app.MapHealthChecks("/health").AllowAnonymous();
 
 app.MapPost("/api/auth/register", async (
     RegisterRequest request,
     ICredentialRepository credentialRepository,
     IPasswordHasher passwordHasher,
-    IUserServiceClient userServiceClient) =>
+    IUserServiceClient userServiceClient,
+    ILogger<Program> logger) =>
 {
     var user = await userServiceClient.GetByIdAsync(request.UserId);
 
@@ -127,6 +163,7 @@ app.MapPost("/api/auth/register", async (
     );
 
     await credentialRepository.AddAsync(credential);
+    logger.LogInformation("Credential created for user {UserId}", credential.UserId);
 
     return Results.Created(
         $"/api/auth/credentials/{credential.Id}",
@@ -146,7 +183,8 @@ app.MapPost("/api/auth/login", async (
     ICredentialRepository credentialRepository,
     IPasswordHasher passwordHasher,
     IJwtTokenGenerator jwtTokenGenerator,
-    IIntegrationEventPublisher eventPublisher) =>
+    IIntegrationEventPublisher eventPublisher,
+    ILogger<Program> logger) =>
 
 {
     var credential =
@@ -154,6 +192,7 @@ app.MapPost("/api/auth/login", async (
 
     if (credential is null)
     {
+        logger.LogWarning("Login failed for email {Email}", request.Email.Trim().ToLowerInvariant());
         await eventPublisher.PublishAsync(new IntegrationEvent(
             Guid.NewGuid(), "LoginFailed", "AuthService", DateTime.UtcNow, null,
             new Dictionary<string, object?> { ["Email"] = request.Email.Trim().ToLowerInvariant() }));
@@ -169,6 +208,7 @@ app.MapPost("/api/auth/login", async (
 
     if (!validPassword)
     {
+        logger.LogWarning("Login failed for email {Email}", credential.Email);
         await eventPublisher.PublishAsync(new IntegrationEvent(
             Guid.NewGuid(), "LoginFailed", "AuthService", DateTime.UtcNow, null,
             new Dictionary<string, object?>
@@ -188,6 +228,7 @@ app.MapPost("/api/auth/login", async (
             ["UserId"] = credential.UserId,
             ["Email"] = credential.Email
         }));
+    logger.LogInformation("Login succeeded for user {UserId}", credential.UserId);
 
     return Results.Ok(
         new AuthResponse(

@@ -6,15 +6,30 @@ using IdentityHub.RoleService.Infrastructure.Clients;
 using IdentityHub.RoleService.Infrastructure.Messaging;
 using IdentityHub.RoleService.Infrastructure.Persistence;
 using IdentityHub.RoleService.Infrastructure.Repositories;
+using IdentityHub.RoleService.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
+using Serilog.Formatting.Compact;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("ServiceName", "RoleService")
+        .WriteTo.Console(new RenderedCompactJsonFormatter());
+});
 
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<RoleDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("SqlServer")));
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<RoleDbContext>("sqlserver");
 builder.Services.AddScoped<IRoleRepository, EfRoleRepository>();
 builder.Services.AddScoped<IUserRoleRepository, EfUserRoleRepository>();
 builder.Services.AddScoped<IIntegrationEventPublisher, RabbitMqEventPublisher>();
@@ -60,9 +75,29 @@ using (var scope = app.Services.CreateScope())
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("RequestMethod", httpContext.Request.Method);
+        diagnosticContext.Set("RequestPath", httpContext.Request.Path.Value ?? "/");
+        diagnosticContext.Set("StatusCode", httpContext.Response.StatusCode);
+
+        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? httpContext.User.FindFirst("sub")?.Value;
+        if (!string.IsNullOrWhiteSpace(userId))
+            diagnosticContext.Set("UserId", userId);
+    };
+});
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<UserLogContextMiddleware>();
+
+app.MapHealthChecks("/health").AllowAnonymous();
 
 var protectedApi = app.MapGroup("/api").RequireAuthorization();
 
@@ -82,7 +117,8 @@ protectedApi.MapPost("/roles", async (
     CreateRoleRequest request,
     IRoleRepository repository,
     IIntegrationEventPublisher eventPublisher,
-    CancellationToken cancellationToken) =>
+    CancellationToken cancellationToken,
+    ILogger<Program> logger) =>
 {
     try
     {
@@ -94,6 +130,7 @@ protectedApi.MapPost("/roles", async (
         await eventPublisher.PublishAsync(new IntegrationEvent(
             Guid.NewGuid(), "RoleCreated", "RoleService", DateTime.UtcNow, null,
             new Dictionary<string, object?> { ["RoleId"] = role.Id, ["Name"] = role.Name }), cancellationToken);
+        logger.LogInformation("Role created {RoleId} {RoleName}", role.Id, role.Name);
 
         return Results.Created($"/api/roles/{role.Id}", role);
     }
@@ -133,13 +170,15 @@ protectedApi.MapPut("/roles/{id:guid}", async (
 protectedApi.MapDelete("/roles/{id:guid}", async (
     Guid id,
     IRoleRepository repository,
-    CancellationToken cancellationToken) =>
+    CancellationToken cancellationToken,
+    ILogger<Program> logger) =>
 {
     var role = await repository.GetByIdAsync(id, cancellationToken);
     if (role is null) return Results.NotFound();
 
     role.Deactivate();
     await repository.UpdateAsync(role, cancellationToken);
+    logger.LogInformation("Role deactivated {RoleId}", role.Id);
     return Results.NoContent();
 });
 
@@ -150,7 +189,8 @@ protectedApi.MapPost("/roles/{roleId:guid}/users/{userId:guid}", async (
     IUserRoleRepository userRoleRepository,
     IUserServiceClient userServiceClient,
     IIntegrationEventPublisher eventPublisher,
-    CancellationToken cancellationToken) =>
+    CancellationToken cancellationToken,
+    ILogger<Program> logger) =>
 {
     UserServiceUser? user;
     try
@@ -176,6 +216,7 @@ protectedApi.MapPost("/roles/{roleId:guid}/users/{userId:guid}", async (
     await eventPublisher.PublishAsync(new IntegrationEvent(
         Guid.NewGuid(), "RoleAssigned", "RoleService", DateTime.UtcNow, null,
         new Dictionary<string, object?> { ["RoleId"] = roleId, ["UserId"] = userId }), cancellationToken);
+    logger.LogInformation("Role assigned {RoleId} to user {UserId}", roleId, userId);
 
     return Results.Created($"/api/roles/{roleId}/users/{userId}", userRole);
 });
@@ -185,7 +226,8 @@ protectedApi.MapDelete("/roles/{roleId:guid}/users/{userId:guid}", async (
     Guid userId,
     IUserRoleRepository repository,
     IIntegrationEventPublisher eventPublisher,
-    CancellationToken cancellationToken) =>
+    CancellationToken cancellationToken,
+    ILogger<Program> logger) =>
 {
     var userRole = await repository.GetAsync(roleId, userId, cancellationToken);
     if (userRole is null) return Results.NotFound();
@@ -194,6 +236,7 @@ protectedApi.MapDelete("/roles/{roleId:guid}/users/{userId:guid}", async (
     await eventPublisher.PublishAsync(new IntegrationEvent(
         Guid.NewGuid(), "RoleRemoved", "RoleService", DateTime.UtcNow, null,
         new Dictionary<string, object?> { ["RoleId"] = roleId, ["UserId"] = userId }), cancellationToken);
+    logger.LogInformation("Role removed {RoleId} from user {UserId}", roleId, userId);
     return Results.NoContent();
 });
 

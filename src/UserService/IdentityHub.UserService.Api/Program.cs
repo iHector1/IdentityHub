@@ -5,16 +5,32 @@ using IdentityHub.UserService.Domain.Entities;
 using IdentityHub.UserService.Infrastructure.Repositories;
 using IdentityHub.UserService.Infrastructure.Persistence;
 using IdentityHub.UserService.Infrastructure.Messaging;
+using IdentityHub.UserService.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
+using Serilog.Formatting.Compact;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("ServiceName", "UserService")
+        .WriteTo.Console(new RenderedCompactJsonFormatter());
+});
+
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<UserDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("SqlServer")
     ));
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<UserDbContext>("sqlserver");
 
 builder.Services.AddScoped<IUserRepository, EfUserRepository>();
 builder.Services.AddScoped<IIntegrationEventPublisher, RabbitMqEventPublisher>();
@@ -56,9 +72,30 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("RequestMethod", httpContext.Request.Method);
+        diagnosticContext.Set("RequestPath", httpContext.Request.Path.Value ?? "/");
+        diagnosticContext.Set("StatusCode", httpContext.Response.StatusCode);
+
+        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? httpContext.User.FindFirst("sub")?.Value;
+        if (!string.IsNullOrWhiteSpace(userId))
+            diagnosticContext.Set("UserId", userId);
+    };
+});
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<UserLogContextMiddleware>();
+
+app.MapHealthChecks("/health").AllowAnonymous();
 
 app.MapGet("/api/users", async (IUserRepository userRepository) =>
 {
@@ -93,7 +130,11 @@ app.MapGet("/internal/users/{id:guid}", async (
         : Results.Ok(new { user.Id, user.Email, user.IsActive });
 });
 
-app.MapPost("/api/users", async (CreateUserRequest request, IUserRepository userRepository, IIntegrationEventPublisher eventPublisher) =>
+app.MapPost("/api/users", async (
+    CreateUserRequest request,
+    IUserRepository userRepository,
+    IIntegrationEventPublisher eventPublisher,
+    ILogger<Program> logger) =>
 {
     var existingUser = await userRepository.GetByEmailAsync(request.Email);
     if (existingUser is not null)
@@ -112,10 +153,15 @@ app.MapPost("/api/users", async (CreateUserRequest request, IUserRepository user
             ["LastName"] = newUser.LastName,
             ["Email"] = newUser.Email
         }));
+    logger.LogInformation("User created {UserId} {Email}", newUser.Id, newUser.Email);
     return Results.Created($"/api/users/{newUser.Id}", newUser);
 });
 
-app.MapPut("/api/users/{id:guid}", async (Guid id, UpdateUserRequest request, IUserRepository userRepository) =>
+app.MapPut("/api/users/{id:guid}", async (
+    Guid id,
+    UpdateUserRequest request,
+    IUserRepository userRepository,
+    ILogger<Program> logger) =>
 {
     var user = await userRepository.GetByIdAsync(id);
     if (user is null)
@@ -135,10 +181,14 @@ app.MapPut("/api/users/{id:guid}", async (Guid id, UpdateUserRequest request, IU
         request.Email
     );
     await userRepository.UpdateAsync(user);
+    logger.LogInformation("User updated {UserId}", user.Id);
     return Results.Ok(user);
 }).RequireAuthorization();
 
-app.MapDelete("/api/users/{id:guid}", async (Guid id, IUserRepository userRepository) =>
+app.MapDelete("/api/users/{id:guid}", async (
+    Guid id,
+    IUserRepository userRepository,
+    ILogger<Program> logger) =>
 {
     var user = await userRepository.GetByIdAsync(id);
     if (user is null)
@@ -147,6 +197,7 @@ app.MapDelete("/api/users/{id:guid}", async (Guid id, IUserRepository userReposi
     }
 
     await userRepository.DeleteAsync(user);
+    logger.LogInformation("User deleted {UserId}", user.Id);
     return Results.NoContent();
 }).RequireAuthorization();
 
