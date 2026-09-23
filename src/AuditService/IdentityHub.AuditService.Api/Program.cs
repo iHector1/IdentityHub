@@ -1,6 +1,9 @@
+using System.Text;
 using IdentityHub.AuditService.Application.Abstractions;
 using IdentityHub.AuditService.Infrastructure.Messaging;
 using IdentityHub.AuditService.Infrastructure.Repositories;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,14 +11,42 @@ builder.Services.AddOpenApi();
 builder.Services.AddSingleton<IAuditRepository, MongoAuditRepository>();
 builder.Services.AddHostedService<RabbitMqAuditConsumer>();
 
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? throw new InvalidOperationException("JWT key is not configured.");
+var jwtIssuer = builder.Configuration["Jwt:Issuer"]
+    ?? throw new InvalidOperationException("JWT issuer is not configured.");
+var jwtAudience = builder.Configuration["Jwt:Audience"]
+    ?? throw new InvalidOperationException("JWT audience is not configured.");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 
-app.MapGet("/api/audit", async (
+var protectedApi = app.MapGroup("/api").RequireAuthorization();
+
+protectedApi.MapGet("/audit", async (
     int? page,
     int? pageSize,
     IAuditRepository repository,
@@ -27,7 +58,7 @@ app.MapGet("/api/audit", async (
     return Results.Ok(new { Page = currentPage, PageSize = currentPageSize, Items = events });
 });
 
-app.MapGet("/api/audit/{id}", async (
+protectedApi.MapGet("/audit/{id}", async (
     string id,
     IAuditRepository repository,
     CancellationToken cancellationToken) =>
@@ -36,13 +67,13 @@ app.MapGet("/api/audit/{id}", async (
     return auditEvent is null ? Results.NotFound() : Results.Ok(auditEvent);
 });
 
-app.MapGet("/api/audit/user/{userId}", async (
+protectedApi.MapGet("/audit/user/{userId}", async (
     string userId,
     IAuditRepository repository,
     CancellationToken cancellationToken) =>
     Results.Ok(await repository.GetByUserIdAsync(userId, cancellationToken)));
 
-app.MapGet("/api/audit/type/{eventType}", async (
+protectedApi.MapGet("/audit/type/{eventType}", async (
     string eventType,
     IAuditRepository repository,
     CancellationToken cancellationToken) =>

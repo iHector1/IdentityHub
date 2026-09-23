@@ -28,6 +28,10 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__SqlServer: "Server=sqlserver,1433;Database=identityhub_users;User Id=sa;Password=IdentityHub123!;TrustServerCertificate=True;MultipleActiveResultSets=True"
       RabbitMQ__ConnectionString: "amqp://guest:guest@rabbitmq:5672/"
+      Jwt__Key: "IdentityHubDevelopmentJwtKey-ChangeThisInProduction-2026"
+      Jwt__Issuer: "IdentityHub.AuthService"
+      Jwt__Audience: "IdentityHub"
+      InternalServices__ApiKey: "IdentityHub-Internal-Development-Key-2026"
     ports:
       - "5094:8080"
     depends_on:
@@ -49,6 +53,7 @@ services:
       Jwt__Issuer: "IdentityHub.AuthService"
       Jwt__Audience: "IdentityHub"
       RabbitMQ__ConnectionString: "amqp://guest:guest@rabbitmq:5672/"
+      InternalServices__ApiKey: "IdentityHub-Internal-Development-Key-2026"
     ports:
       - "5029:8080"
     depends_on:
@@ -69,6 +74,10 @@ services:
       ConnectionStrings__SqlServer: "Server=sqlserver,1433;Database=identityhub_roles;User Id=sa;Password=IdentityHub123!;TrustServerCertificate=True;MultipleActiveResultSets=True"
       Services__UserService: "http://userservice:8080"
       RabbitMQ__ConnectionString: "amqp://guest:guest@rabbitmq:5672/"
+      Jwt__Key: "IdentityHubDevelopmentJwtKey-ChangeThisInProduction-2026"
+      Jwt__Issuer: "IdentityHub.AuthService"
+      Jwt__Audience: "IdentityHub"
+      InternalServices__ApiKey: "IdentityHub-Internal-Development-Key-2026"
     ports:
       - "5070:8080"
     depends_on:
@@ -89,6 +98,9 @@ services:
       MongoDB__ConnectionString: "mongodb://mongodb:27017"
       MongoDB__DatabaseName: "identityhub_audit"
       RabbitMQ__ConnectionString: "amqp://guest:guest@rabbitmq:5672/"
+      Jwt__Key: "IdentityHubDevelopmentJwtKey-ChangeThisInProduction-2026"
+      Jwt__Issuer: "IdentityHub.AuthService"
+      Jwt__Audience: "IdentityHub"
     ports:
       - "5080:8080"
     depends_on:

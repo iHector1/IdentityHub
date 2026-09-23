@@ -1,3 +1,4 @@
+using System.Text;
 using IdentityHub.RoleService.Application.Abstractions;
 using IdentityHub.RoleService.Application.Roles;
 using IdentityHub.RoleService.Domain.Entities;
@@ -5,7 +6,9 @@ using IdentityHub.RoleService.Infrastructure.Clients;
 using IdentityHub.RoleService.Infrastructure.Messaging;
 using IdentityHub.RoleService.Infrastructure.Persistence;
 using IdentityHub.RoleService.Infrastructure.Repositories;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +25,30 @@ builder.Services.AddHttpClient<IUserServiceClient, UserServiceClient>(client =>
     client.BaseAddress = new Uri(userServiceUrl);
 });
 
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? throw new InvalidOperationException("JWT key is not configured.");
+var jwtIssuer = builder.Configuration["Jwt:Issuer"]
+    ?? throw new InvalidOperationException("JWT issuer is not configured.");
+var jwtAudience = builder.Configuration["Jwt:Audience"]
+    ?? throw new InvalidOperationException("JWT audience is not configured.");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -34,11 +61,15 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 
-app.MapGet("/api/roles", async (IRoleRepository repository, CancellationToken cancellationToken) =>
+var protectedApi = app.MapGroup("/api").RequireAuthorization();
+
+protectedApi.MapGet("/roles", async (IRoleRepository repository, CancellationToken cancellationToken) =>
     Results.Ok(await repository.GetAllAsync(cancellationToken)));
 
-app.MapGet("/api/roles/{id:guid}", async (
+protectedApi.MapGet("/roles/{id:guid}", async (
     Guid id,
     IRoleRepository repository,
     CancellationToken cancellationToken) =>
@@ -47,7 +78,7 @@ app.MapGet("/api/roles/{id:guid}", async (
     return role is null ? Results.NotFound() : Results.Ok(role);
 });
 
-app.MapPost("/api/roles", async (
+protectedApi.MapPost("/roles", async (
     CreateRoleRequest request,
     IRoleRepository repository,
     IIntegrationEventPublisher eventPublisher,
@@ -72,7 +103,7 @@ app.MapPost("/api/roles", async (
     }
 });
 
-app.MapPut("/api/roles/{id:guid}", async (
+protectedApi.MapPut("/roles/{id:guid}", async (
     Guid id,
     UpdateRoleRequest request,
     IRoleRepository repository,
@@ -99,7 +130,7 @@ app.MapPut("/api/roles/{id:guid}", async (
     }
 });
 
-app.MapDelete("/api/roles/{id:guid}", async (
+protectedApi.MapDelete("/roles/{id:guid}", async (
     Guid id,
     IRoleRepository repository,
     CancellationToken cancellationToken) =>
@@ -112,7 +143,7 @@ app.MapDelete("/api/roles/{id:guid}", async (
     return Results.NoContent();
 });
 
-app.MapPost("/api/roles/{roleId:guid}/users/{userId:guid}", async (
+protectedApi.MapPost("/roles/{roleId:guid}/users/{userId:guid}", async (
     Guid roleId,
     Guid userId,
     IRoleRepository roleRepository,
@@ -149,7 +180,7 @@ app.MapPost("/api/roles/{roleId:guid}/users/{userId:guid}", async (
     return Results.Created($"/api/roles/{roleId}/users/{userId}", userRole);
 });
 
-app.MapDelete("/api/roles/{roleId:guid}/users/{userId:guid}", async (
+protectedApi.MapDelete("/roles/{roleId:guid}/users/{userId:guid}", async (
     Guid roleId,
     Guid userId,
     IUserRoleRepository repository,
@@ -166,7 +197,7 @@ app.MapDelete("/api/roles/{roleId:guid}/users/{userId:guid}", async (
     return Results.NoContent();
 });
 
-app.MapGet("/api/roles/users/{userId:guid}", async (
+protectedApi.MapGet("/roles/users/{userId:guid}", async (
     Guid userId,
     IUserRoleRepository userRoleRepository,
     IRoleRepository roleRepository,
