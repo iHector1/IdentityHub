@@ -63,6 +63,13 @@ export interface AiAnswer {
   answer: string;
   sources: string[];
   latencyMs: number;
+  quality: 'Grounded' | 'NoContext';
+  usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+    totalTokens: number | null;
+    estimatedCost: number | null;
+  };
 }
 
 export interface AiIndexResult {

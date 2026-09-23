@@ -1,7 +1,9 @@
 using IdentityHub.AIService.Application.Abstractions;
 using IdentityHub.AIService.Application.Models;
+using IdentityHub.AIService.Application.Options;
 using IdentityHub.AIService.Application.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace IdentityHub.AIService.Tests;
 
@@ -55,6 +57,7 @@ public sealed class RagServiceTests
         var result = await service.AskAsync("How is JWT validated?");
 
         Assert.Equal(new[] { "architecture.md", "jwt.md" }, result.Sources);
+        Assert.Equal("Grounded", result.Quality);
     }
 
     [Fact]
@@ -68,17 +71,42 @@ public sealed class RagServiceTests
         Assert.Contains("not available", result.Answer, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(result.Sources);
         Assert.Null(chat.UserPrompt);
+        Assert.Equal("NoContext", result.Quality);
+        Assert.Null(result.Usage.TotalTokens);
+    }
+
+    [Fact]
+    public async Task AskAsync_ShouldReturnTokenUsageAndConfiguredCost()
+    {
+        var chat = new FakeChatService(new ChatResult("Grounded answer", 100, 50, 150));
+        var service = CreateService(
+            new[] { new RetrievedChunk("roleservice.md", "RoleService", 0, "Roles are assigned.", 0.91) },
+            chat,
+            new OpenAiCostOptions
+            {
+                InputCostPerMillionTokens = 2m,
+                OutputCostPerMillionTokens = 4m
+            });
+
+        var result = await service.AskAsync("How does role assignment work?");
+
+        Assert.Equal(100, result.Usage.InputTokens);
+        Assert.Equal(50, result.Usage.OutputTokens);
+        Assert.Equal(150, result.Usage.TotalTokens);
+        Assert.Equal(0.0004m, result.Usage.EstimatedCost);
     }
 
     private static RagService CreateService(
         IReadOnlyCollection<RetrievedChunk> results,
-        FakeChatService? chat = null) =>
+        FakeChatService? chat = null,
+        OpenAiCostOptions? costOptions = null) =>
         new(
             new FakeDocumentReader(),
             new FakeEmbeddingService(),
             new FakeVectorStore(results),
             chat ?? new FakeChatService(),
-            NullLogger<RagService>.Instance);
+            NullLogger<RagService>.Instance,
+            Options.Create(costOptions ?? new OpenAiCostOptions()));
 
     private sealed class FakeDocumentReader : IKnowledgeDocumentReader
     {
@@ -100,13 +128,13 @@ public sealed class RagServiceTests
             Task.FromResult(results);
     }
 
-    private sealed class FakeChatService : IChatService
+    private sealed class FakeChatService(ChatResult? result = null) : IChatService
     {
         public string? UserPrompt { get; private set; }
-        public Task<string> GenerateAsync(string systemPrompt, string userPrompt, CancellationToken cancellationToken = default)
+        public Task<ChatResult> GenerateAsync(string systemPrompt, string userPrompt, CancellationToken cancellationToken = default)
         {
             UserPrompt = userPrompt;
-            return Task.FromResult("Grounded answer");
+            return Task.FromResult(result ?? new ChatResult("Grounded answer", 12, 8, 20));
         }
     }
 }

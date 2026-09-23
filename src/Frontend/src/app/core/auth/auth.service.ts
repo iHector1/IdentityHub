@@ -1,8 +1,9 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, tap } from 'rxjs';
+import { Observable, finalize, tap } from 'rxjs';
 import { API_URLS } from '../config/api.config';
 import { LoginResponse } from '../models/models';
+import { AuthStore } from './auth.store';
 
 export interface LoginCredentials {
   email: string;
@@ -12,12 +13,23 @@ export interface LoginCredentials {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
-  private readonly tokenKey = 'identityhub_token';
+  private readonly authStore = inject(AuthStore);
+
+  readonly token = this.authStore.token;
+  readonly loading = this.authStore.loading;
+  readonly error = this.authStore.error;
 
   login(credentials: LoginCredentials): Observable<LoginResponse> {
+    this.authStore.setLoading(true);
+    this.authStore.setError(null);
+
     return this.http
       .post<LoginResponse>(`${API_URLS.auth}/api/auth/login`, credentials)
-      .pipe(tap(response => localStorage.setItem(this.tokenKey, response.token)));
+      .pipe(
+        tap(response => this.authStore.setToken(response.token)),
+        tap({ error: () => this.authStore.setError('Invalid email or password.') }),
+        finalize(() => this.authStore.setLoading(false))
+      );
   }
 
   registerCredential(userId: string, email: string, password: string): Observable<unknown> {
@@ -29,14 +41,14 @@ export class AuthService {
   }
 
   getToken(): string | null {
-    return localStorage.getItem(this.tokenKey);
+    return this.authStore.token();
   }
 
   isAuthenticated(): boolean {
-    return !!this.getToken();
+    return this.authStore.isAuthenticated();
   }
 
   logout(): void {
-    localStorage.removeItem(this.tokenKey);
+    this.authStore.clearToken();
   }
 }

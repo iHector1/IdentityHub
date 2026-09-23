@@ -1,8 +1,10 @@
+using IdentityHub.AIService.Application.Models;
+
 namespace IdentityHub.AIService.Application.Abstractions;
 
 public interface IChatService
 {
-    Task<string> GenerateAsync(
+    Task<ChatResult> GenerateAsync(
         string systemPrompt,
         string userPrompt,
         CancellationToken cancellationToken = default);
