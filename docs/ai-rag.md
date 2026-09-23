@@ -1,47 +1,40 @@
-# IdentityHub AI/RAG
+# AI y RAG
 
-AIService is a small retrieval-augmented generation service. It does not use agents or tool calling.
+AIService responde preguntas usando documentación interna del proyecto. La respuesta se basa en el contexto encontrado en Qdrant; si no hay información suficiente, el servicio lo indica.
+
+## Flujo
 
 ```text
-Markdown documents
-    -> chunks with source metadata
-    -> OpenAI text-embedding-3-small
-    -> Qdrant identityhub_knowledge
-    -> top 5 similar chunks
-    -> grounded prompt
-    -> OpenAI gpt-5.6-luna
-    -> answer and retrieved sources
+Pregunta
+    -> embedding
+    -> búsqueda en Qdrant
+    -> contexto relevante
+    -> prompt con la pregunta y el contexto
+    -> OpenAI
+    -> respuesta y fuentes
 ```
+
+La indexación lee los archivos Markdown de `src/AIService/Knowledge`, crea fragmentos con metadata, genera sus embeddings y los guarda en la colección `identityhub_knowledge` de Qdrant. La indexación se ejecuta automáticamente después de un login exitoso desde el frontend y también está disponible mediante el endpoint de indexación.
+
+## Modelos y configuración
+
+- Embeddings: `text-embedding-3-small`.
+- Generación de respuesta: `gpt-5.6-luna`.
+- Qdrant dentro de Docker: `http://qdrant:6333`.
+- Colección: `identityhub_knowledge`.
+- API key: variable `OPENAI_API_KEY` o configuración `OpenAI__ApiKey`.
+
+La clave se configura en `.env`, que está excluido de Git. No debe escribirse en `docker-compose.yml`, en el código ni en los logs.
 
 ## Endpoints
 
-Both endpoints require the same bearer JWT as the other protected services:
+Los dos endpoints requieren el mismo JWT que los demás servicios protegidos:
 
-- `POST /api/ai/index` reads `src/AIService/Knowledge`, creates chunks and upserts their vectors in Qdrant. Point IDs are deterministic, so repeated indexing updates the same points instead of duplicating them.
-- `POST /api/ai/ask` accepts `{ "question": "How does role assignment work?" }` and returns `answer`, `sources` and `latencyMs`.
+- `POST /api/ai/index`: lee la documentación, genera embeddings y actualiza los puntos en Qdrant. Repetirlo no duplica los puntos porque sus IDs son deterministas.
+- `POST /api/ai/ask`: recibe `{ "question": "How does role assignment work?" }` y devuelve `answer`, `sources` y `latencyMs`.
 
-## Configuration
+## Fuentes y latencia
 
-Set the OpenAI key outside Git using either environment variable:
+La respuesta devuelve los archivos usados como fuentes para que el usuario pueda identificar de dónde salió el contexto. AIService registra por separado el tiempo de embeddings, la búsqueda vectorial, la generación, la latencia total y la cantidad de chunks recuperados.
 
-```powershell
-$env:OPENAI_API_KEY = "your-key"
-docker compose up -d --build aiservice qdrant
-```
-
-The equivalent .NET configuration key is `OpenAI__ApiKey`. Docker uses `OpenAI__ApiKey=${OPENAI_API_KEY}` without storing the value in `docker-compose.yml`.
-
-Defaults are:
-
-- Generation model: `gpt-5.6-luna`
-- Embedding model: `text-embedding-3-small`
-- Qdrant URL in Docker: `http://qdrant:6333`
-- Qdrant collection: `identityhub_knowledge`
-
-If the key is missing, the service still starts, but indexing and questions fail with a configuration error rather than exposing a secret or using ungrounded model output.
-
-## Latency, cost and quality
-
-AIService logs structured measurements for embedding, vector search, generation, total latency and the number of retrieved chunks. It does not log API keys, Authorization headers or full prompts.
-
-Embedding every document during indexing costs tokens once per index run. Each question costs one embedding request plus one generation request. Smaller chunks and top-5 retrieval reduce prompt size and cost, while overlap helps preserve context across chunk boundaries. Retrieval quality depends on the accuracy and freshness of the Markdown knowledge files; the assistant is instructed to say when the indexed context is insufficient.
+Cada indexación genera embeddings para los documentos. Cada pregunta usa un embedding y una solicitud de generación; por eso conviene mantener el contexto limitado y actualizar la documentación solo cuando sea necesario.

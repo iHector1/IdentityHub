@@ -28,6 +28,7 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__SqlServer: "Server=sqlserver,1433;Database=identityhub_users;User Id=sa;Password=IdentityHub123!;TrustServerCertificate=True;MultipleActiveResultSets=True"
       RabbitMQ__ConnectionString: "amqp://guest:guest@rabbitmq:5672/"
+      Redis__ConnectionString: "redis:6379"
       Jwt__Key: "IdentityHubDevelopmentJwtKey-ChangeThisInProduction-2026"
       Jwt__Issuer: "IdentityHub.AuthService"
       Jwt__Audience: "IdentityHub"
@@ -37,6 +38,8 @@ services:
     depends_on:
       sqlserver:
         condition: service_healthy
+      redis:
+        condition: service_started
     restart: on-failure
 
   authservice:
@@ -147,6 +150,15 @@ services:
       - aiservice
     restart: on-failure
 
+  redis:
+    image: redis:7-alpine
+    container_name: identityhub-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - identityhub-redis-data:/data
+    restart: unless-stopped
+
   mongodb:
     image: mongo:7
     container_name: identityhub-mongodb
@@ -189,3 +201,4 @@ volumes:
   identityhub-mongodb-data:
   identityhub-rabbitmq-data:
   identityhub-qdrant-data:
+  identityhub-redis-data:
