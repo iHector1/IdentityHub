@@ -41,11 +41,16 @@ builder.Services.AddDbContext<UserDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("SqlServer")
     ));
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration["Redis:ConnectionString"] ?? string.Empty;
+});
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<UserDbContext>("sqlserver");
 
 builder.Services.AddScoped<IUserRepository, EfUserRepository>();
 builder.Services.AddScoped<IIntegrationEventPublisher, RabbitMqEventPublisher>();
+builder.Services.AddScoped<CachedUserService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("JWT key is not configured.");
@@ -128,9 +133,9 @@ app.MapGet("/api/users", async (IUserRepository userRepository) =>
     return Results.Ok(users);
 }).RequireAuthorization();
 
-app.MapGet("/api/users/{id:guid}", async (Guid id, IUserRepository userRepository) =>
+app.MapGet("/api/users/{id:guid}", async (Guid id, CachedUserService cachedUserService) =>
 {
-    var user = await userRepository.GetByIdAsync(id);
+    var user = await cachedUserService.GetByIdAsync(id);
     return user is not null ? Results.Ok(user) : Results.NotFound();
 });
 
@@ -186,6 +191,7 @@ app.MapPut("/api/users/{id:guid}", async (
     Guid id,
     UpdateUserRequest request,
     IUserRepository userRepository,
+    CachedUserService cachedUserService,
     ILogger<Program> logger) =>
 {
     var user = await userRepository.GetByIdAsync(id);
@@ -206,6 +212,7 @@ app.MapPut("/api/users/{id:guid}", async (
         request.Email
     );
     await userRepository.UpdateAsync(user);
+    await cachedUserService.InvalidateAsync(id);
     logger.LogInformation("User updated {UserId}", user.Id);
     return Results.Ok(user);
 }).RequireAuthorization();
@@ -215,6 +222,7 @@ app.MapPut("/api/users/{id:guid}/status", async (
     SetUserStatusRequest request,
     IUserRepository userRepository,
     IIntegrationEventPublisher eventPublisher,
+    CachedUserService cachedUserService,
     ILogger<Program> logger) =>
 {
     var user = await userRepository.GetByIdAsync(id);
@@ -233,6 +241,7 @@ app.MapPut("/api/users/{id:guid}/status", async (
     }
 
     await userRepository.UpdateAsync(user);
+    await cachedUserService.InvalidateAsync(id);
     await eventPublisher.PublishAsync(new IntegrationEvent(
         Guid.NewGuid(),
         request.IsActive ? "UserActivated" : "UserDeactivated",
