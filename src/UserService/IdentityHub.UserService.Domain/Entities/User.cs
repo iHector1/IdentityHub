@@ -39,6 +39,15 @@ public class User
         UpdatedAt = null;
     }
 
+    public User(Guid id, string firstName, string lastName, string email)
+        : this(firstName, lastName, email)
+    {
+        if (id == Guid.Empty)
+            throw new ArgumentException("User id is required.", nameof(id));
+
+        Id = id;
+    }
+
     public void Desactivate()
     {
         IsActive = false;

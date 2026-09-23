@@ -76,14 +76,15 @@ public sealed class EfUserRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task DeleteAsync_ShouldRemoveUser()
+    public async Task UpdateAsync_ShouldPersistStatusChange()
     {
         var user = new User("Ana", "García", "ana@example.com");
         await _repository.AddAsync(user);
 
-        await _repository.DeleteAsync(user);
+        user.Desactivate();
+        await _repository.UpdateAsync(user);
 
-        Assert.Null(await _repository.GetByIdAsync(user.Id));
+        Assert.False((await _repository.GetByIdAsync(user.Id))!.IsActive);
     }
 
     public void Dispose()

@@ -14,6 +14,8 @@ using Serilog;
 using Serilog.Formatting.Compact;
 using System.Security.Claims;
 
+var seedUserId = Guid.Parse("3d7fbb77-07f1-4f86-8f01-b3e98e3d4a11");
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog((context, services, configuration) =>
 {
@@ -24,6 +26,11 @@ builder.Host.UseSerilog((context, services, configuration) =>
         .Enrich.WithProperty("ServiceName", "RoleService")
         .WriteTo.Console(new RenderedCompactJsonFormatter());
 });
+
+builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
+    policy.WithOrigins("http://localhost:4200")
+        .AllowAnyHeader()
+        .AllowAnyMethod()));
 
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<RoleDbContext>(options =>
@@ -70,6 +77,26 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<RoleDbContext>();
     await dbContext.Database.EnsureCreatedAsync();
+
+    if (app.Environment.IsDevelopment())
+    {
+        var roleRepository = scope.ServiceProvider.GetRequiredService<IRoleRepository>();
+        var userRoleRepository = scope.ServiceProvider.GetRequiredService<IUserRoleRepository>();
+        var administratorRole = await roleRepository.GetByNameAsync("Administrador");
+
+        if (administratorRole is null)
+        {
+            administratorRole = new Role("Administrador", "Development administrator role.");
+            await roleRepository.AddAsync(administratorRole);
+            app.Logger.LogInformation("Development seed role created {RoleId} {RoleName}", administratorRole.Id, administratorRole.Name);
+        }
+
+        if (await userRoleRepository.GetAsync(administratorRole.Id, seedUserId) is null)
+        {
+            await userRoleRepository.AddAsync(new UserRole(seedUserId, administratorRole.Id));
+            app.Logger.LogInformation("Development seed role assigned {RoleId} to {UserId}", administratorRole.Id, seedUserId);
+        }
+    }
 }
 
 if (app.Environment.IsDevelopment())
@@ -93,6 +120,7 @@ app.UseSerilogRequestLogging(options =>
 });
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
+app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<UserLogContextMiddleware>();

@@ -13,6 +13,9 @@ using Serilog;
 using Serilog.Formatting.Compact;
 using System.Security.Claims;
 
+const string seedUserEmail = "hectorjosuegc@example.com";
+var seedUserId = Guid.Parse("3d7fbb77-07f1-4f86-8f01-b3e98e3d4a11");
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog((context, services, configuration) =>
 {
@@ -23,6 +26,11 @@ builder.Host.UseSerilog((context, services, configuration) =>
         .Enrich.WithProperty("ServiceName", "UserService")
         .WriteTo.Console(new RenderedCompactJsonFormatter());
 });
+
+builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
+    policy.WithOrigins("http://localhost:4200")
+        .AllowAnyHeader()
+        .AllowAnyMethod()));
 
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<UserDbContext>(options =>
@@ -66,6 +74,18 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<UserDbContext>();
     await dbContext.Database.MigrateAsync();
+
+    if (app.Environment.IsDevelopment() &&
+        !await dbContext.Users.AnyAsync(user => user.Email == seedUserEmail))
+    {
+        dbContext.Users.Add(new User(
+            seedUserId,
+            "Hector",
+            "Josue GC",
+            seedUserEmail));
+        await dbContext.SaveChangesAsync();
+        app.Logger.LogInformation("Development seed user created {UserId} {Email}", seedUserId, seedUserEmail);
+    }
 }
 
 if (app.Environment.IsDevelopment())
@@ -91,6 +111,7 @@ app.UseSerilogRequestLogging(options =>
 });
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
+app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<UserLogContextMiddleware>();
@@ -185,9 +206,11 @@ app.MapPut("/api/users/{id:guid}", async (
     return Results.Ok(user);
 }).RequireAuthorization();
 
-app.MapDelete("/api/users/{id:guid}", async (
+app.MapPut("/api/users/{id:guid}/status", async (
     Guid id,
+    SetUserStatusRequest request,
     IUserRepository userRepository,
+    IIntegrationEventPublisher eventPublisher,
     ILogger<Program> logger) =>
 {
     var user = await userRepository.GetByIdAsync(id);
@@ -196,9 +219,30 @@ app.MapDelete("/api/users/{id:guid}", async (
         return Results.NotFound();
     }
 
-    await userRepository.DeleteAsync(user);
-    logger.LogInformation("User deleted {UserId}", user.Id);
-    return Results.NoContent();
+    if (request.IsActive)
+    {
+        user.Activate();
+    }
+    else
+    {
+        user.Desactivate();
+    }
+
+    await userRepository.UpdateAsync(user);
+    await eventPublisher.PublishAsync(new IntegrationEvent(
+        Guid.NewGuid(),
+        request.IsActive ? "UserActivated" : "UserDeactivated",
+        "UserService",
+        DateTime.UtcNow,
+        user.Id.ToString(),
+        new Dictionary<string, object?>
+        {
+            ["UserId"] = user.Id,
+            ["Email"] = user.Email,
+            ["IsActive"] = user.IsActive
+        }));
+    logger.LogInformation("User status changed {UserId} {IsActive}", user.Id, user.IsActive);
+    return Results.Ok(user);
 }).RequireAuthorization();
 
 app.Run();

@@ -1,0 +1,115 @@
+<div class="mb-4">
+  <h1 class="page-title h3 mb-1">Roles</h1>
+  <p class="text-muted mb-0">Create roles and manage user assignments.</p>
+</div>
+
+<div class="alert alert-success" *ngIf="successMessage">{{ successMessage }}</div>
+<div class="alert alert-danger" *ngIf="errorMessage">{{ errorMessage }}</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-6">
+    <section class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h2 class="h5 mb-3">New role</h2>
+        <form [formGroup]="roleForm" (ngSubmit)="createRole()" novalidate>
+          <div class="mb-3">
+            <label class="form-label" for="roleName">Name</label>
+            <input id="roleName" class="form-control" formControlName="name">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="roleDescription">Description</label>
+            <textarea id="roleDescription" class="form-control" rows="3" formControlName="description"></textarea>
+          </div>
+          <button class="btn btn-dark" type="submit" [disabled]="saving">Create role</button>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <div class="col-lg-6">
+    <section class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Assign role</h2>
+        <form [formGroup]="assignmentForm" (ngSubmit)="assignRole()" novalidate>
+          <div class="mb-3">
+            <label class="form-label" for="assignmentUser">User</label>
+            <select id="assignmentUser" class="form-select" formControlName="userId" (change)="onUserChange()">
+              <option value="">Select a user</option>
+              <option *ngFor="let user of users" [value]="user.id">
+                {{ user.firstName }} {{ user.lastName }} ({{ user.email }})
+              </option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="assignmentRole">Role</label>
+            <select id="assignmentRole" class="form-select" formControlName="roleId">
+              <option value="">Select a role</option>
+              <option *ngFor="let role of roles" [value]="role.id">{{ role.name }}</option>
+            </select>
+          </div>
+          <button class="btn btn-dark" type="submit" [disabled]="saving">Assign</button>
+        </form>
+      </div>
+    </section>
+  </div>
+</div>
+
+<section class="card border-0 shadow-sm mb-4">
+  <div class="card-body p-0">
+    <div class="p-3 border-bottom" *ngIf="loading">Loading...</div>
+    <div class="table-responsive" *ngIf="!loading">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let role of roles">
+            <td>{{ role.name }}</td>
+            <td>{{ role.description || '-' }}</td>
+            <td>
+              <span class="badge" [class.text-bg-success]="role.isActive" [class.text-bg-secondary]="!role.isActive">
+                {{ role.isActive ? 'Active' : 'Inactive' }}
+              </span>
+            </td>
+          </tr>
+          <tr *ngIf="roles.length === 0">
+            <td colspan="3" class="text-center text-muted py-4">No roles found.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm" *ngIf="assignmentForm.controls.userId.value">
+  <div class="card-body">
+    <h2 class="h5">Selected user's roles</h2>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th>Description</th>
+            <th class="text-end">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let assignment of assignedRoles">
+            <td>{{ assignment.name || assignment.roleId }}</td>
+            <td>{{ assignment.description || '-' }}</td>
+            <td class="text-end">
+              <button class="btn btn-sm btn-outline-danger" type="button" (click)="removeRole(assignment)">Remove</button>
+            </td>
+          </tr>
+          <tr *ngIf="assignedRoles.length === 0">
+            <td colspan="3" class="text-muted">No roles assigned.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
