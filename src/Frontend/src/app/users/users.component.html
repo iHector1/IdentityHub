@@ -22,7 +22,19 @@
       </div>
       <div class="col-md-4">
         <label class="form-label" for="userEmail">Email</label>
-        <input id="userEmail" type="email" class="form-control" formControlName="email">
+        <input
+          id="userEmail"
+          type="email"
+          class="form-control"
+          formControlName="email"
+          autocomplete="email"
+          [class.is-invalid]="userForm.controls.email.invalid && userForm.controls.email.touched">
+        <div class="invalid-feedback" *ngIf="userForm.controls.email.hasError('required') && userForm.controls.email.touched">
+          Email is required.
+        </div>
+        <div class="invalid-feedback" *ngIf="userForm.controls.email.hasError('email') && userForm.controls.email.touched">
+          Enter a valid email with @ and a domain, for example: user@example.com.
+        </div>
       </div>
       <div class="col-12 d-flex gap-2">
         <button class="btn btn-dark" type="submit" [disabled]="saving">
