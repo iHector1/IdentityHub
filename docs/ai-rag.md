@@ -25,3 +25,9 @@ Los endpoints requieren el JWT de los demás servicios protegidos:
 - `POST /api/ai/ask`: recibe `{ "question": "How does role assignment work?" }`.
 
 La respuesta de `/api/ai/ask` incluye `answer`, `sources`, `latencyMs`, `quality` y `usage` con tokens y `estimatedCost` (`null` si no hay precios configurados).
+
+AIService también se integra directamente con UserService mediante REST interno para generar resúmenes de usuarios:
+
+- `GET /api/ai/users/{userId}/summary`: requiere JWT, consulta los datos públicos del usuario y devuelve un resumen junto con `usage` y `latencyMs`.
+
+La integración solo envía a OpenAI `UserId`, `Email` e `IsActive`; nunca envía contraseñas, hashes ni tokens.

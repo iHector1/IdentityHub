@@ -1,3 +1,4 @@
+using IdentityHub.UserService.Application.Users;
 using IdentityHub.UserService.Domain.Entities;
 
 namespace IdentityHub.UserService.Tests;
@@ -68,5 +69,17 @@ public sealed class UserTests
 
         Assert.True(user.IsActive);
         Assert.NotNull(user.UpdatedAt);
+    }
+
+    [Fact]
+    public void UserRequests_ShouldExposeTheirRequiredValues()
+    {
+        var create = new CreateUserRequest("Ana", "García", "ana@example.com");
+        var update = new UpdateUserRequest("Beatriz", "López", "beatriz@example.com");
+        var status = new SetUserStatusRequest(false);
+
+        Assert.Equal("Ana", create.FirstName);
+        Assert.Equal("beatriz@example.com", update.Email);
+        Assert.False(status.IsActive);
     }
 }

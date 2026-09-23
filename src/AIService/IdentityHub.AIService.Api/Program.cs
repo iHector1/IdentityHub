@@ -26,6 +26,7 @@ builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
 builder.Services.AddScoped<RagService>();
+builder.Services.AddScoped<UserSummaryService>();
 builder.Services.AddAiInfrastructure(builder.Configuration);
 
 var jwtKey = builder.Configuration["Jwt:Key"]
@@ -118,6 +119,30 @@ protectedApi.MapPost("/ask", async (
     {
         return Results.BadRequest(new { error = exception.Message });
     }
+});
+
+protectedApi.MapGet("/users/{userId:guid}/summary", async (
+    Guid userId,
+    UserSummaryService userSummaryService,
+    CancellationToken cancellationToken) =>
+{
+    var result = await userSummaryService.SummarizeAsync(userId, cancellationToken);
+    if (result is null)
+        return Results.NotFound();
+
+    return Results.Ok(new
+    {
+        result.UserId,
+        result.Answer,
+        result.LatencyMs,
+        Usage = new
+        {
+            result.Usage.InputTokens,
+            result.Usage.OutputTokens,
+            result.Usage.TotalTokens,
+            result.Usage.EstimatedCost
+        }
+    });
 });
 
 app.Run();

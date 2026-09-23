@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AiApiService } from '../core/services/ai-api.service';
+import { AiUsage } from '../core/models/models';
 
 @Component({
   selector: 'app-ai',
@@ -16,6 +17,8 @@ export class AiComponent {
   answer = '';
   sources: string[] = [];
   latencyMs: number | null = null;
+  quality: 'Grounded' | 'NoContext' | null = null;
+  usage: AiUsage | null = null;
   loading = false;
   errorMessage = '';
 
@@ -26,12 +29,16 @@ export class AiComponent {
     this.answer = '';
     this.sources = [];
     this.latencyMs = null;
+    this.quality = null;
+    this.usage = null;
     this.errorMessage = '';
     this.aiApi.ask(this.question.trim()).subscribe({
       next: response => {
         this.answer = response.answer;
         this.sources = response.sources;
         this.latencyMs = response.latencyMs;
+        this.quality = response.quality;
+        this.usage = response.usage;
         this.loading = false;
       },
       error: () => {

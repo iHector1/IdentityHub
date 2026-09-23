@@ -136,6 +136,7 @@ No existe un `DELETE` de usuario en la implementación actual.
 
 - `POST /api/ai/index`
 - `POST /api/ai/ask`
+- `GET /api/ai/users/{userId}/summary`
 
 ## Frontend
 

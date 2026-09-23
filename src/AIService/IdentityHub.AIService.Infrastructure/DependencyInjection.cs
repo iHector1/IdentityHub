@@ -38,6 +38,13 @@ public static class DependencyInjection
             client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(90);
         });
+        services.AddHttpClient<IUserServiceClient, UserServiceClient>((client) =>
+        {
+            var userServiceUrl = configuration["Services:UserService"]
+                ?? throw new InvalidOperationException("UserService URL is not configured.");
+            client.BaseAddress = new Uri(userServiceUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
         services.AddHttpClient<IVectorStore, QdrantVectorStore>((provider, client) =>
         {
             var options = provider.GetRequiredService<IOptions<QdrantOptions>>().Value;
