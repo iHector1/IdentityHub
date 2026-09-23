@@ -3,6 +3,7 @@ import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../core/auth/auth.service';
+import { AiApiService } from '../core/services/ai-api.service';
 
 @Component({
   selector: 'app-login',
@@ -13,6 +14,7 @@ import { AuthService } from '../core/auth/auth.service';
 export class LoginComponent {
   private readonly formBuilder = inject(FormBuilder);
   private readonly authService = inject(AuthService);
+  private readonly aiApi = inject(AiApiService);
   private readonly router = inject(Router);
 
   readonly form = this.formBuilder.nonNullable.group({
@@ -36,6 +38,12 @@ export class LoginComponent {
       next: () => {
         this.loading = false;
         void this.router.navigate(['/users']);
+
+        // The login response has already been saved by AuthService.tap().
+        // The JWT interceptor adds it to the protected indexing request.
+        this.aiApi.indexKnowledge().subscribe({
+          error: error => console.error('AI knowledge indexing failed after login.', error)
+        });
       },
       error: () => {
         this.loading = false;

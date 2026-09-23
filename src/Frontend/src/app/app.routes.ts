@@ -5,6 +5,7 @@ import { LoginComponent } from './login/login.component';
 import { UsersComponent } from './users/users.component';
 import { RolesComponent } from './roles/roles.component';
 import { AuditComponent } from './audit/audit.component';
+import { AiComponent } from './ai/ai.component';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -16,6 +17,7 @@ export const routes: Routes = [
       { path: 'users', component: UsersComponent },
       { path: 'roles', component: RolesComponent },
       { path: 'audit', component: AuditComponent },
+      { path: 'ai', component: AiComponent },
       { path: '', pathMatch: 'full', redirectTo: 'users' }
     ]
   },

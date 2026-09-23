@@ -59,3 +59,14 @@ export interface AuditPage {
   pageSize: number;
   items: AuditEvent[];
 }
+export interface AiAnswer {
+  answer: string;
+  sources: string[];
+  latencyMs: number;
+}
+
+export interface AiIndexResult {
+  documentsIndexed: number;
+  chunksIndexed: number;
+  latencyMs: number;
+}

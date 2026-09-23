@@ -28,4 +28,11 @@
     <Project Path="src/AuditService/IdentityHub.AuditService.Infrastructure/IdentityHub.AuditService.Infrastructure.csproj" />
     <Project Path="src/AuditService/IdentityHub.AuditService.Tests/IdentityHub.AuditService.Tests.csproj" />
   </Folder>
+  <Folder Name="/src/AIService/">
+    <Project Path="src/AIService/IdentityHub.AIService.Api/IdentityHub.AIService.Api.csproj" />
+    <Project Path="src/AIService/IdentityHub.AIService.Application/IdentityHub.AIService.Application.csproj" />
+    <Project Path="src/AIService/IdentityHub.AIService.Domain/IdentityHub.AIService.Domain.csproj" />
+    <Project Path="src/AIService/IdentityHub.AIService.Infrastructure/IdentityHub.AIService.Infrastructure.csproj" />
+    <Project Path="src/AIService/IdentityHub.AIService.Tests/IdentityHub.AIService.Tests.csproj" />
+  </Folder>
 </Solution>

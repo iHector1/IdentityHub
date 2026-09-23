@@ -20,6 +20,10 @@ const string seedUserPassword = "12345";
 var seedUserId = Guid.Parse("3d7fbb77-07f1-4f86-8f01-b3e98e3d4a11");
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
+    policy.WithOrigins("http://localhost:4200")
+        .AllowAnyHeader()
+        .AllowAnyMethod()));
 builder.Host.UseSerilog((context, services, configuration) =>
 {
     configuration
